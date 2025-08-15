@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useDarkMode } from '../components/useDarkMode.js';
 // import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useLoginMutation } from '../services/apiSlice';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -19,60 +20,60 @@ export default function Login() {
   // Dark mode hook
   const { isDarkMode, toggleDarkMode } = useDarkMode();
 
-  // Demo users
-  const users = [
-    { username: 'admin', password: 'admin123', role: 'admin' },
-    { username: 'kuryer2', password: '123456', role: 'courier' },
-    { username: 'kuryer1', password: '123456', role: 'courier' },
-  ];
-  const { login } = useAuth(); // ← bunu əlavə et
+  const { login } = useAuth();
+  const [apiLogin, { isLoading: isApiLoading }] = useLoginMutation();
 
   // Dynamic styles based on dark mode
   const getContainerStyle = () => ({
-    position: 'relative',
+    position: 'fixed', // fixed edirik ki, scroll olmasın
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     minHeight: '100vh',
+    height: '100vh', // tam ekran hündürlüyü
     background: isDarkMode
       ? 'linear-gradient(135deg, #1f2937, #111827)'
       : 'linear-gradient(135deg, #3b82f6, #2563eb)',
-    overflow: 'hidden',
+    overflow: 'hidden', // scroll olmasın
     fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
     color: 'white',
   });
 
   const getBackgroundElementStyle1 = () => ({
     position: 'absolute',
-    width: '400px',
-    height: '400px',
+    width: 'clamp(200px, 40vw, 400px)', // responsive ölçü
+    height: 'clamp(200px, 40vw, 400px)',
     background: isDarkMode
       ? 'radial-gradient(circle at center, rgba(75, 85, 99, 0.3), transparent 70%)'
       : 'radial-gradient(circle at center, rgba(255, 255, 255, 0.1), transparent 70%)',
     borderRadius: '50%',
-    top: '-100px',
-    left: '-100px',
+    top: '-50px',
+    left: '-50px',
     filter: 'blur(70px)',
   });
 
   const getBackgroundElementStyle2 = () => ({
     position: 'absolute',
-    width: '400px',
-    height: '400px',
+    width: 'clamp(200px, 40vw, 400px)', // responsive ölçü
+    height: 'clamp(200px, 40vw, 400px)',
     background: isDarkMode
       ? 'radial-gradient(circle at center, rgba(55, 65, 81, 0.4), transparent 70%)'
       : 'radial-gradient(circle at center, rgba(191, 219, 254, 0.3), transparent 70%)',
     borderRadius: '50%',
-    bottom: '-120px',
-    right: '-100px',
+    bottom: '-60px',
+    right: '-50px',
     filter: 'blur(50px)',
   });
 
   const getBrandContainerStyle = () => ({
-    marginBottom: '30px',
+    marginBottom: 'clamp(20px, 4vw, 30px)', // responsive margin
     textAlign: 'center',
     background: isDarkMode
       ? 'rgba(55, 65, 81, 0.3)'
       : 'rgba(255, 255, 255, 0.1)',
     borderRadius: '12px',
-    padding: '30px 20px',
+    padding: 'clamp(20px, 4vw, 30px) clamp(15px, 3vw, 20px)', // responsive padding
     backdropFilter: 'blur(10px)',
     border: isDarkMode
       ? '1px solid rgba(75, 85, 99, 0.3)'
@@ -95,7 +96,7 @@ export default function Login() {
   const getInputStyle = () => ({
     width: '100%',
     maxWidth: '100%',
-    padding: '12px 12px 12px 40px',
+    padding: 'clamp(10px, 2.5vw, 12px) clamp(10px, 2.5vw, 12px) clamp(10px, 2.5vw, 12px) clamp(35px, 8vw, 40px)', // responsive padding
     borderRadius: '8px',
     border: isDarkMode
       ? '1.5px solid rgba(75, 85, 99, 0.5)'
@@ -104,7 +105,7 @@ export default function Login() {
       ? 'rgba(55, 65, 81, 0.4)'
       : 'rgba(255, 255, 255, 0.15)',
     color: 'white',
-    fontSize: '1rem',
+    fontSize: 'clamp(0.9rem, 2.5vw, 1rem)', // responsive font size
     outline: 'none',
     transition: 'all 0.3s ease',
     boxSizing: 'border-box',
@@ -113,8 +114,8 @@ export default function Login() {
   const getButtonStyle = () => ({
     position: 'relative',
     width: '100%',
-    padding: '14px',
-    fontSize: '1rem',
+    padding: 'clamp(12px, 3vw, 14px)', // responsive padding
+    fontSize: 'clamp(0.9rem, 2.5vw, 1rem)', // responsive font size
     fontWeight: '600',
     color: 'white',
     background: isDarkMode
@@ -130,8 +131,8 @@ export default function Login() {
   });
 
   const getKhamsakraftFooterStyle = () => ({
-    marginBottom: '15px',
-    padding: '15px',
+    marginBottom: 'clamp(12px, 3vw, 15px)', // responsive margin
+    padding: 'clamp(12px, 3vw, 15px)', // responsive padding
     background: isDarkMode
       ? 'rgba(251, 191, 36, 0.05)'
       : 'rgba(251, 191, 36, 0.1)',
@@ -143,7 +144,7 @@ export default function Login() {
 
   const footerTextStyle = {
     margin: 0,
-    fontSize: '0.9rem',
+    fontSize: 'clamp(0.8rem, 2.5vw, 0.9rem)', // responsive font size
     color: isHovered ? '#fff' : 'rgba(255, 255, 255, 0.4)',
     transition: 'color 0.3s ease',
     cursor: 'default'
@@ -154,34 +155,66 @@ export default function Login() {
     setIsLoading(true);
     setError('');
 
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    const user = users.find(
-      (u) => u.username === username && u.password === password
-    );
-
-    if (!user) {
-      setError('İstifadəçi adı və ya şifrə yanlışdır.');
+    try {
+      // API login cəhdi
+      const result = await apiLogin({ username, password }).unwrap();
+      
+      console.log('Backend response:', result); // Debug üçün
+      
+      // Backend cavabı yoxlayırıq
+      if (result && result.role) {
+        // API login uğurlu
+        const userData = {
+          username: username, // Frontend-dən gələn username
+          role: result.role, // Backend-dən gələn role
+          id: result.id || null, // Əgər varsa
+          ...result // Bütün backend cavabını əlavə edirik
+        };
+        
+        console.log('User data for navigation:', userData); // Debug üçün
+        
+        login(userData, result.token || 'temp-token'); // Token yoxdursa temporary token
+        setFoundUser(userData);
+        setSuccess(true);
+        setIsLoading(false);
+        return;
+      } else {
+        setError('Giriş uğursuz oldu. Zəhmət olmasa məlumatları yoxlayın.');
+        setIsLoading(false);
+      }
+    } catch (apiError) {
+      console.error('API login xətası:', apiError);
+      
+      if (apiError.status === 401) {
+        setError('İstifadəçi adı və ya şifrə yanlışdır.');
+      } else if (apiError.status === 403) {
+        setError('Giriş icazəsi yoxdur.');
+      } else if (apiError.status === 500) {
+        setError('Server xətası. Zəhmət olmasa sonra cəhd edin.');
+      } else {
+        setError('Giriş zamanı xəta baş verdi. Zəhmət olmasa yenidən cəhd edin.');
+      }
+      
       setIsLoading(false);
-      return;
     }
-
-    login(user); 
-    setFoundUser(user);
-    setSuccess(true);
-    setIsLoading(false);
   };
 
 
 
   useEffect(() => {
     if (success && foundUser) {
+      console.log('Navigation triggered:', { success, foundUser }); // Debug üçün
       setTimeout(() => {
-        if (foundUser.role === 'admin') {
+        console.log('Navigating to:', foundUser.role); // Debug üçün
+        // API-dən gələn role-a əsaslanan navigation
+        if (foundUser.role === 'admin' || foundUser.role === 'ADMIN') {
+          console.log('Going to dashboard');
           navigate('/dashboard');
-        } else if (foundUser.role === 'courier') {
-          navigate('/courier');  // Kuryer paneli ünvanı
+        } else if (foundUser.role === 'courier' || foundUser.role === 'COURIER') {
+          console.log('Going to courier panel');
+          navigate('/courier');
         } else {
+          console.log('Going to my-orders');
           navigate('/my-orders');
         }
       }, 500);
@@ -195,9 +228,9 @@ export default function Login() {
         onClick={toggleDarkMode}
         style={{
           position: 'fixed',
-          top: '20px',
-          right: '20px',
-          padding: '12px',
+          top: 'clamp(15px, 3vw, 20px)', // responsive top
+          right: 'clamp(15px, 3vw, 20px)', // responsive right
+          padding: 'clamp(10px, 2.5vw, 12px)', // responsive padding
           background: isDarkMode
             ? 'rgba(55, 65, 81, 0.8)'
             : 'rgba(255, 255, 255, 0.2)',
@@ -252,17 +285,17 @@ export default function Login() {
         />
       ))}
 
-      <div style={mainContainerStyle}>
+      <div style={mainContainerStyle} className="main-container">
         {/* Main Brand Container */}
-        <div style={getBrandContainerStyle()}>
+        <div style={getBrandContainerStyle()} className="brand-container">
           <div style={logoContainerStyle}>
             <div style={logoStyle}>
               <Waves size={40} color="white" />
             </div>
             <div style={logoGlowStyle}></div>
           </div>
-          <h1 style={titleStyle}>SuMan</h1>
-          <p style={subtitleStyle}>Su idarəetmə sistemi</p>
+          <h1 style={titleStyle} className="title">SuMan</h1>
+          <p style={subtitleStyle} className="subtitle">Su idarəetmə sistemi</p>
 
           {/* Premium Badge */}
           <div style={premiumBadgeStyle}>
@@ -271,7 +304,7 @@ export default function Login() {
           </div>
         </div>
 
-        <div style={getFormContainerStyle()}>
+        <div style={getFormContainerStyle()} className="form-container">
           <div style={formOverlayStyle}></div>
           <div style={formContentStyle}>
             <h2 style={formTitleStyle}>
@@ -389,12 +422,7 @@ export default function Login() {
 
         {/* KhamsaCraft Footer */}
         <div style={footerStyle}>
-          <div style={getKhamsakraftFooterStyle()}>
-            <div style={footerBrandStyle}>
-              <Sparkles size={16} color="#fbbf24" />
-              <span style={footerBrandTextStyle}> KhamsaCraft məhsulu</span>
-            </div>
-          </div>
+          
           <p
             style={footerTextStyle}
             onMouseEnter={() => setIsHovered(true)}
@@ -439,6 +467,62 @@ export default function Login() {
         .khamsa-sparkle {
           animation: sparkle 3s ease-in-out infinite;
         }
+        
+        /* Mobile responsive styles */
+        @media (max-width: 768px) {
+          .main-container {
+            margin: 20px auto;
+            padding: 15px 20px 30px;
+          }
+          
+          .form-container {
+            padding: 20px 15px;
+          }
+          
+          .brand-container {
+            padding: 20px 15px;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .main-container {
+            margin: 15px auto;
+            padding: 10px 15px 25px;
+          }
+          
+          .form-container {
+            padding: 15px 10px;
+          }
+          
+          .brand-container {
+            padding: 15px 10px;
+          }
+          
+          .title {
+            font-size: 2rem;
+          }
+          
+          .subtitle {
+            font-size: 0.85rem;
+          }
+        }
+        
+        /* Landscape orientation for mobile */
+        @media (max-height: 500px) and (orientation: landscape) {
+          .main-container {
+            margin: 10px auto;
+            padding: 10px 20px 20px;
+          }
+          
+          .brand-container {
+            margin-bottom: 15px;
+            padding: 15px 20px;
+          }
+          
+          .form-container {
+            padding: 15px 20px;
+          }
+        }
       `}</style>
     </div>
   );
@@ -458,16 +542,17 @@ const backgroundElementStyle3 = {
 
 const mainContainerStyle = {
   position: 'relative',
-  maxWidth: '420px',
-  margin: '50px auto',
-  padding: '20px 30px 40px',
+  maxWidth: 'clamp(320px, 90vw, 420px)', // responsive max width
+  width: '90vw', // responsive width
+  margin: 'clamp(20px, 5vh, 50px) auto', // responsive margin
+  padding: 'clamp(15px, 3vw, 20px) clamp(20px, 4vw, 30px) clamp(30px, 6vw, 40px)', // responsive padding
   zIndex: 10,
 };
 
 const logoContainerStyle = {
   position: 'relative',
   display: 'inline-block',
-  marginBottom: '15px',
+  marginBottom: 'clamp(10px, 2.5vw, 15px)', // responsive margin
 };
 
 const logoStyle = {
@@ -480,8 +565,8 @@ const logoGlowStyle = {
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
-  width: '60px',
-  height: '60px',
+  width: 'clamp(40px, 12vw, 60px)', // responsive width
+  height: 'clamp(40px, 12vw, 60px)', // responsive height
   background: 'radial-gradient(circle, rgba(59, 130, 246, 0.3), transparent 70%)',
   borderRadius: '50%',
   filter: 'blur(10px)',
@@ -490,28 +575,28 @@ const logoGlowStyle = {
 
 const titleStyle = {
   margin: 0,
-  fontSize: '2.5rem',
+  fontSize: 'clamp(2rem, 8vw, 2.5rem)', // responsive font size
   fontWeight: '700',
   color: 'white',
   textShadow: '0 2px 8px rgba(0,0,0,0.2)',
 };
 
 const subtitleStyle = {
-  marginTop: '8px',
-  fontSize: '1rem',
+  marginTop: 'clamp(6px, 1.5vw, 8px)', // responsive margin
+  fontSize: 'clamp(0.85rem, 2.5vw, 1rem)', // responsive font size
   color: 'rgba(255, 255, 255, 0.8)',
-  marginBottom: '15px',
+  marginBottom: 'clamp(12px, 3vw, 15px)', // responsive margin
 };
 
 const premiumBadgeStyle = {
   display: 'inline-flex',
   alignItems: 'center',
-  gap: '6px',
-  padding: '6px 12px',
+  gap: 'clamp(4px, 1.5vw, 6px)', // responsive gap
+  padding: 'clamp(4px, 1.5vw, 6px) clamp(8px, 2.5vw, 12px)', // responsive padding
   background: 'linear-gradient(45deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.2))',
   border: '1px solid rgba(251, 191, 36, 0.3)',
   borderRadius: '20px',
-  fontSize: '0.8rem',
+  fontSize: 'clamp(0.7rem, 2.5vw, 0.8rem)', // responsive font size
   color: '#fbbf24',
   fontWeight: '600',
 };
@@ -526,31 +611,31 @@ const formOverlayStyle = {
 
 const formContentStyle = {
   position: 'relative',
-  padding: '30px 20px',
+  padding: 'clamp(20px, 5vw, 30px) clamp(15px, 3vw, 20px)', // responsive padding
   zIndex: 2,
 };
 
 const formTitleStyle = {
-  marginBottom: '24px',
-  fontSize: '1.5rem',
+  marginBottom: 'clamp(16px, 4vw, 24px)', // responsive margin
+  fontSize: 'clamp(1.2rem, 4vw, 1.5rem)', // responsive font size
   fontWeight: '600',
   color: 'white',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   flexDirection: 'column',
-  gap: '10px',
+  gap: 'clamp(8px, 2vw, 10px)', // responsive gap
 };
 
 const inputContainerStyle = {
   position: 'relative',
-  marginBottom: '20px',
+  marginBottom: 'clamp(16px, 4vw, 20px)', // responsive margin
 };
 
 const inputIconStyle = {
   position: 'absolute',
   top: '50%',
-  left: '14px',
+  left: 'clamp(10px, 2.5vw, 14px)', // responsive left
   transform: 'translateY(-50%)',
   color: 'rgba(191, 219, 254, 0.7)',
   zIndex: 2,
@@ -559,7 +644,7 @@ const inputIconStyle = {
 const togglePasswordStyle = {
   position: 'absolute',
   top: '50%',
-  right: '12px',
+  right: 'clamp(8px, 2.5vw, 12px)', // responsive right
   transform: 'translateY(-50%)',
   background: 'none',
   border: 'none',
@@ -624,7 +709,7 @@ const infoTextStyle = {
 };
 
 const footerStyle = {
-  marginTop: '30px',
+  marginTop: 'clamp(20px, 5vw, 30px)', // responsive margin
   textAlign: 'center',
 };
 
@@ -632,12 +717,12 @@ const footerBrandStyle = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  gap: '8px',
-  marginBottom: '8px',
+  gap: 'clamp(6px, 1.5vw, 8px)', // responsive gap
+  marginBottom: 'clamp(6px, 1.5vw, 8px)', // responsive margin
 };
 
 const footerBrandTextStyle = {
-  fontSize: '1rem',
+  fontSize: 'clamp(0.85rem, 2.5vw, 1rem)', // responsive font size
   fontWeight: '600',
   color: '#fbbf24',
 };

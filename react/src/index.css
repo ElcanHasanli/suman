@@ -6,3 +6,24 @@ body{
     padding: 0;
     margin: 0;
 }
+
+/* Global responsive helpers */
+.container-responsive {
+    width: min(90vw, 1200px);
+    margin-inline: auto;
+}
+
+/* Ensure root takes full height to help fixed layouts */
+html, body, #root {
+    height: 100%;
+}
+
+/* Login page helpers in case of className usage */
+.main-container { max-width: 420px; width: min(90vw, 420px); }
+.brand-container { border-radius: 12px; }
+.form-container { border-radius: 12px; }
+
+/* Prevent unexpected body scroll while login fixed */
+body.login-fixed {
+    overflow: hidden;
+}

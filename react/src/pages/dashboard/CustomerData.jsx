@@ -1,13 +1,23 @@
-import React, { useState, useContext } from 'react';
-import { Plus, Minus, Users, User, MapPin, Phone, DollarSign, Search } from 'lucide-react';
-import { OrdersContext } from '../../contexts/OrdersContext';
+import React, { useState } from 'react';
+import { Plus, Minus, Users, User, MapPin, Phone, DollarSign, Search, Download, Edit, Trash2 } from 'lucide-react';
+import { 
+  useGetCustomersQuery, 
+  useCreateCustomerMutation, 
+  useUpdateCustomerMutation, 
+  useDeleteCustomerMutation,
+  useSearchCustomerByPhoneQuery,
+  useSearchCustomerByNameSurnameQuery,
+  useExportCustomersQuery,
+  useGetCustomerCountQuery
+} from '../../services/apiSlice';
+import { useAuth } from '../../contexts/AuthContext';
 
 function CustomerData() {
-  const { customers, setCustomers } = useContext(OrdersContext);
-  const [editMode, setEditMode] = useState(null); // id ilə saxlanacaq
-
+  const { token, isAuthenticated } = useAuth();
+  const [editMode, setEditMode] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchType, setSearchType] = useState('general'); // general, phone, name
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -15,21 +25,48 @@ function CustomerData() {
     phone: '',
     pricePerBidon: '',
   });
+
+  // API hooks
+  const { data: customers = [], isLoading, error, refetch } = useGetCustomersQuery();
+  const { data: customerCount = 0 } = useGetCustomerCountQuery();
+  const [createCustomer, { isLoading: isCreating }] = useCreateCustomerMutation();
+  const [updateCustomer, { isLoading: isUpdating }] = useUpdateCustomerMutation();
+  const [deleteCustomer, { isLoading: isDeleting }] = useDeleteCustomerMutation();
+  
+  // Search hooks
+  const { data: phoneSearchResults = [] } = useSearchCustomerByPhoneQuery(searchTerm, {
+    skip: searchType !== 'phone' || !searchTerm
+  });
+  const { data: nameSearchResults = [] } = useSearchCustomerByNameSurnameQuery(
+    { name: searchTerm.split(' ')[0], surname: searchTerm.split(' ')[1] || '' },
+    { skip: searchType !== 'name' || !searchTerm }
+  );
+
+  // Export functionality
+  const { data: exportData } = useExportCustomersQuery(undefined, {
+    skip: true // Only fetch when needed
+  });
+
   const handleEditCustomer = (customer) => {
     setShowForm(true);
     setEditMode(customer.id);
     setFormData({
-      firstName: customer.firstName,
-      lastName: customer.lastName,
-      address: customer.address,
-      phone: customer.phone,
-      pricePerBidon: customer.pricePerBidon,
+      firstName: customer.firstName || '',
+      lastName: customer.lastName || '',
+      address: customer.address || '',
+      phone: customer.phone || '',
+      pricePerBidon: customer.pricePerBidon || '',
     });
   };
 
-  const handleDeleteCustomer = (id) => {
+  const handleDeleteCustomer = async (id) => {
     if (window.confirm("Bu müştərini silmək istədiyinizə əminsiniz?")) {
-      setCustomers(prev => prev.filter(customer => customer.id !== id));
+      try {
+        await deleteCustomer(id).unwrap();
+        // Success message could be added here
+      } catch (error) {
+        alert('Müştəri silinərkən xəta baş verdi: ' + error.message);
+      }
     }
   };
 
@@ -40,32 +77,19 @@ function CustomerData() {
 
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
+    if (e.target.value.length > 0) {
+      // Auto-detect search type
+      if (/^\d+$/.test(e.target.value)) {
+        setSearchType('phone');
+      } else if (e.target.value.includes(' ')) {
+        setSearchType('name');
+      } else {
+        setSearchType('general');
+      }
+    }
   };
 
-  // Filtrlənmiş müştəri siyahısı
- const filteredCustomers = customers.filter(customer => {
-  const search = searchTerm.toLowerCase().trim();
-  const searchNumber = search.replace(/[^0-9.]/g, "");
-
-  const fullName = `${customer.firstName || ""} ${customer.lastName || ""}`.toLowerCase();
-
-  return (
-    fullName.includes(search) ||
-    (customer.firstName && customer.firstName.toLowerCase().includes(search)) ||
-    (customer.lastName && customer.lastName.toLowerCase().includes(search)) ||
-    (customer.phone && customer.phone.toLowerCase().includes(search)) ||
-    (customer.address && customer.address.toLowerCase().includes(search)) ||
-    (
-      searchNumber &&
-      customer.pricePerBidon &&
-      parseFloat(customer.pricePerBidon) === parseFloat(searchNumber) // tam bərabərlik
-    )
-  );
-});
-
-
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     let { firstName, lastName, address, phone, pricePerBidon } = formData;
 
@@ -99,39 +123,86 @@ function CustomerData() {
       }
     }
 
-    const isPhoneExists = customers.some(c => c.phone === phone && c.id !== editMode);
-    if (isPhoneExists) {
-      alert('Bu telefon nömrəsi ilə artıq müştəri mövcuddur!');
-      return;
-    }
+    try {
+      if (editMode) {
+        // Update customer
+        await updateCustomer({ id: editMode, firstName, lastName, address, phone, pricePerBidon: price }).unwrap();
+        setEditMode(null);
+      } else {
+        // Create new customer
+        await createCustomer({ firstName, lastName, address, phone, pricePerBidon: price }).unwrap();
+      }
 
-    if (editMode) {
-      // Redaktə et
-      setCustomers(prev =>
-        prev.map(c =>
-          c.id === editMode
-            ? { ...c, firstName, lastName, address, phone, pricePerBidon: price }
-            : c
-        )
-      );
-      setEditMode(null);
-    } else {
-      // Yeni əlavə et
-      const newId = customers.length ? customers[customers.length - 1].id + 1 : 1;
-      setCustomers(prev => [...prev, { id: newId, firstName, lastName, address, phone, pricePerBidon: price }]);
+      // Reset form
+      setFormData({
+        firstName: '',
+        lastName: '',
+        address: '',
+        phone: '',
+        pricePerBidon: '',
+      });
+      setShowForm(false);
+      
+      // Refetch customers
+      refetch();
+    } catch (error) {
+      alert('Xəta baş verdi: ' + error.message);
     }
-
-    // Form sıfırla
-    setFormData({
-      firstName: '',
-      lastName: '',
-      address: '',
-      phone: '',
-      pricePerBidon: '',
-    });
-    setShowForm(false);
   };
 
+  const handleExportCustomers = async () => {
+    try {
+      const response = await fetch('/api/customers/export', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'customers.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch (error) {
+      alert('Export xətası: ' + error.message);
+    }
+  };
+
+  // Filtered customers based on search
+  const getFilteredCustomers = () => {
+    if (!searchTerm) return customers;
+
+    switch (searchType) {
+      case 'phone':
+        return phoneSearchResults.length > 0 ? phoneSearchResults : customers.filter(c => 
+          c.phone && c.phone.includes(searchTerm)
+        );
+      case 'name':
+        return nameSearchResults.length > 0 ? nameSearchResults : customers.filter(c => {
+          const fullName = `${c.firstName || ''} ${c.lastName || ''}`.toLowerCase();
+          return fullName.includes(searchTerm.toLowerCase());
+        });
+      default:
+        return customers.filter(customer => {
+          const search = searchTerm.toLowerCase().trim();
+          const fullName = `${customer.firstName || ""} ${customer.lastName || ""}`.toLowerCase();
+          return (
+            fullName.includes(search) ||
+            (customer.firstName && customer.firstName.toLowerCase().includes(search)) ||
+            (customer.lastName && customer.lastName.toLowerCase().includes(search)) ||
+            (customer.phone && customer.phone.toLowerCase().includes(search)) ||
+            (customer.address && customer.address.toLowerCase().includes(search)) ||
+            (customer.pricePerBidon && customer.pricePerBidon.toString().includes(search))
+          );
+        });
+    }
+  };
 
   const styles = {
     container: {
@@ -198,6 +269,11 @@ function CustomerData() {
       fontWeight: '600',
       margin: 0
     },
+    buttonGroup: {
+      display: 'flex',
+      gap: '12px',
+      flexWrap: 'wrap'
+    },
     addButton: {
       background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
       color: 'white',
@@ -208,6 +284,21 @@ function CustomerData() {
       fontWeight: '600',
       fontSize: '16px',
       boxShadow: '0 10px 25px -5px rgba(37, 99, 235, 0.3)',
+      transition: 'all 0.3s ease',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px'
+    },
+    exportButton: {
+      background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+      color: 'white',
+      padding: '16px 24px',
+      borderRadius: '12px',
+      border: 'none',
+      cursor: 'pointer',
+      fontWeight: '600',
+      fontSize: '16px',
+      boxShadow: '0 10px 25px -5px rgba(5, 150, 105, 0.3)',
       transition: 'all 0.3s ease',
       display: 'flex',
       alignItems: 'center',
@@ -370,6 +461,39 @@ function CustomerData() {
       fontWeight: 'bold',
       fontSize: '14px'
     },
+    actionButtons: {
+      display: 'flex',
+      gap: '8px',
+      flexWrap: 'wrap'
+    },
+    editButton: {
+      background: '#3b82f6',
+      color: 'white',
+      padding: '6px 12px',
+      borderRadius: '8px',
+      border: 'none',
+      cursor: 'pointer',
+      fontSize: '14px',
+      fontWeight: '500',
+      transition: 'background 0.3s ease',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '4px'
+    },
+    deleteButton: {
+      background: '#ef4444',
+      color: 'white',
+      padding: '6px 12px',
+      borderRadius: '8px',
+      border: 'none',
+      cursor: 'pointer',
+      fontSize: '14px',
+      fontWeight: '500',
+      transition: 'background 0.3s ease',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '4px'
+    },
     emptyState: {
       textAlign: 'center',
       padding: '64px 24px'
@@ -383,8 +507,83 @@ function CustomerData() {
     emptyText: {
       color: '#9ca3af',
       margin: 0
-    }
-  };
+    },
+    loadingState: {
+      textAlign: 'center',
+      padding: '64px 24px'
+    },
+    spinner: {
+      border: '4px solid #f3f4f6',
+      borderTop: '4px solid #3b82f6',
+      borderRadius: '50%',
+      width: '40px',
+      height: '40px',
+      animation: 'spin 1s linear infinite',
+      margin: '0 auto 16px'
+    },
+    errorState: {
+      textAlign: 'center',
+      padding: '64px 24px',
+      color: '#ef4444'
+    },
+          retryButton: {
+        background: '#3b82f6',
+        color: 'white',
+        padding: '12px 24px',
+        borderRadius: '8px',
+        border: 'none',
+        cursor: 'pointer',
+        marginTop: '16px'
+      }
+    };
+
+  const filteredCustomers = getFilteredCustomers();
+
+  // Authentication check - daha yumşaq yoxlama
+  if (!token) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.maxWidth}>
+          <div style={styles.errorState}>
+            <p>Giriş tələb olunur. Zəhmət olmasa yenidən giriş edin.</p>
+            <button onClick={() => window.location.href = '/login'} style={styles.retryButton}>
+              Giriş səhifəsinə keç
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.maxWidth}>
+          <div style={styles.loadingState}>
+            <div style={styles.spinner}></div>
+            <p>Müştəri məlumatları yüklənir...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.maxWidth}>
+          <div style={styles.errorState}>
+            <p>Xəta baş verdi: {error.message}</p>
+            <button onClick={() => refetch()} style={styles.retryButton}>
+              Yenidən cəhd edin
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.container}>
@@ -402,42 +601,36 @@ function CustomerData() {
               </div>
             </div>
             <div style={styles.statsBox}>
-              <p style={styles.statsText}>Cəmi Müştəri: {customers.length}</p>
+              <p style={styles.statsText}>Cəmi Müştəri: {customerCount}</p>
             </div>
           </div>
-          {/* {() => {
-            setShowForm(!showForm);
-            setEditMode(null);
-            setFormData({ firstName: '', lastName: '', address: '', phone: '', pricePerBidon: '' });
-          }} */}
 
-          <button
-            onClick={() => setShowForm(!showForm)}
-            style={{
-              ...styles.addButton,
-              background: showForm
-                ? 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)'
-                : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-              boxShadow: showForm
-                ? '0 10px 25px -5px rgba(220, 38, 38, 0.3)'
-                : '0 10px 25px -5px rgba(37, 99, 235, 0.3)'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.transform = 'translateY(-2px)';
-              e.target.style.boxShadow = showForm
-                ? '0 15px 35px -5px rgba(220, 38, 38, 0.4)'
-                : '0 15px 35px -5px rgba(37, 99, 235, 0.4)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.transform = 'translateY(0)';
-              e.target.style.boxShadow = showForm
-                ? '0 10px 25px -5px rgba(220, 38, 38, 0.3)'
-                : '0 10px 25px -5px rgba(37, 99, 235, 0.3)';
-            }}
-          >
-            {showForm ? <Minus size={20} /> : <Plus size={20} />}
-            <span>{showForm ? 'Formu Bağla' : 'Yeni Müştəri Əlavə Et'}</span>
-          </button>
+          <div style={styles.buttonGroup}>
+            <button
+              onClick={() => setShowForm(!showForm)}
+              style={{
+                ...styles.addButton,
+                background: showForm
+                  ? 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)'
+                  : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                boxShadow: showForm
+                  ? '0 10px 25px -5px rgba(220, 38, 38, 0.3)'
+                  : '0 10px 25px -5px rgba(37, 99, 235, 0.3)'
+              }}
+            >
+              {showForm ? <Minus size={20} /> : <Plus size={20} />}
+              <span>{showForm ? 'Formu Bağla' : 'Yeni Müştəri Əlavə Et'}</span>
+            </button>
+
+            <button
+              onClick={handleExportCustomers}
+              style={styles.exportButton}
+              disabled={customers.length === 0}
+            >
+              <Download size={20} />
+              <span>Excel Export</span>
+            </button>
+          </div>
         </div>
 
         {/* Search Section */}
@@ -453,21 +646,16 @@ function CustomerData() {
                 value={searchTerm}
                 onChange={handleSearchChange}
                 style={styles.searchInput}
-                onFocus={(e) => {
-                  e.target.style.borderColor = '#3b82f6';
-                  e.target.style.background = 'white';
-                  e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = '#e5e7eb';
-                  e.target.style.background = '#f9fafb';
-                  e.target.style.boxShadow = 'none';
-                }}
               />
             </div>
             {searchTerm && (
               <div style={styles.searchResults}>
                 {filteredCustomers.length} müştəri tapıldı
+                {searchType !== 'general' && (
+                  <span style={{ marginLeft: '8px', color: '#3b82f6' }}>
+                    ({searchType === 'phone' ? 'Telefon' : 'Ad/Soyad'} axtarışı)
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -477,8 +665,12 @@ function CustomerData() {
         {showForm && (
           <form style={styles.formCard} onSubmit={handleSubmit}>
             <div style={styles.formHeader}>
-              <h2 style={styles.formTitle}>Yeni Müştəri Əlavə Et</h2>
-              <p style={styles.formSubtitle}>Müştəri məlumatlarını daxil edin</p>
+              <h2 style={styles.formTitle}>
+                {editMode ? 'Müştəri Redaktə Et' : 'Yeni Müştəri Əlavə Et'}
+              </h2>
+              <p style={styles.formSubtitle}>
+                {editMode ? 'Müştəri məlumatlarını yeniləyin' : 'Müştəri məlumatlarını daxil edin'}
+              </p>
             </div>
 
             <div style={styles.formGrid}>
@@ -494,16 +686,7 @@ function CustomerData() {
                   value={formData.firstName}
                   onChange={handleChange}
                   style={styles.input}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#3b82f6';
-                    e.target.style.background = 'white';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = '#d1d5db';
-                    e.target.style.background = '#f9fafb';
-                    e.target.style.boxShadow = 'none';
-                  }}
+                  required
                 />
               </div>
 
@@ -519,16 +702,7 @@ function CustomerData() {
                   value={formData.lastName}
                   onChange={handleChange}
                   style={styles.input}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#3b82f6';
-                    e.target.style.background = 'white';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = '#d1d5db';
-                    e.target.style.background = '#f9fafb';
-                    e.target.style.boxShadow = 'none';
-                  }}
+                  required
                 />
               </div>
             </div>
@@ -545,16 +719,7 @@ function CustomerData() {
                 value={formData.address}
                 onChange={handleChange}
                 style={styles.input}
-                onFocus={(e) => {
-                  e.target.style.borderColor = '#3b82f6';
-                  e.target.style.background = 'white';
-                  e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = '#d1d5db';
-                  e.target.style.background = '#f9fafb';
-                  e.target.style.boxShadow = 'none';
-                }}
+                required
               />
             </div>
 
@@ -571,16 +736,7 @@ function CustomerData() {
                   value={formData.phone}
                   onChange={handleChange}
                   style={styles.input}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#3b82f6';
-                    e.target.style.background = 'white';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = '#d1d5db';
-                    e.target.style.background = '#f9fafb';
-                    e.target.style.boxShadow = 'none';
-                  }}
+                  required
                 />
               </div>
 
@@ -596,38 +752,21 @@ function CustomerData() {
                   value={formData.pricePerBidon}
                   onChange={handleChange}
                   style={styles.input}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#3b82f6';
-                    e.target.style.background = 'white';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = '#d1d5db';
-                    e.target.style.background = '#f9fafb';
-                    e.target.style.boxShadow = 'none';
-                  }}
+                  min="0"
+                  step="0.01"
+                  required
                 />
               </div>
             </div>
 
             <button
               type="submit"
-
-              onClick={handleSubmit}
               style={styles.submitButton}
-              onMouseEnter={(e) => {
-                e.target.style.transform = 'translateY(-2px)';
-                e.target.style.boxShadow = '0 15px 35px -5px rgba(5, 150, 105, 0.4)';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = '0 10px 25px -5px rgba(5, 150, 105, 0.3)';
-              }}
+              disabled={isCreating || isUpdating}
             >
-              Müştəri Əlavə Et
+              {isCreating || isUpdating ? 'Yüklənir...' : (editMode ? 'Müştərini Yenilə' : 'Müştəri Əlavə Et')}
             </button>
-            </form>
-
+          </form>
         )}
 
         {/* Table Section */}
@@ -678,88 +817,52 @@ function CustomerData() {
                       Əməliyyat
                     </div>
                   </th>
-
                 </tr>
               </thead>
               <tbody>
-                {filteredCustomers.map((c, index) => (
+                {filteredCustomers.map((customer, index) => (
                   <tr
-                    key={c.id}
+                    key={customer.id}
                     style={index % 2 === 0 ? styles.evenRow : styles.oddRow}
-                    onMouseEnter={(e) => e.target.parentElement.style.background = '#dbeafe'}
-                    onMouseLeave={(e) => e.target.parentElement.style.background = index % 2 === 0 ? '#f9fafb' : 'white'}
                   >
                     <td style={styles.td}>
-                      <span style={{ fontWeight: '600', color: '#1f2937' }}>{c.firstName}</span>
+                      <span style={{ fontWeight: '600', color: '#1f2937' }}>{customer.firstName}</span>
                     </td>
                     <td style={styles.td}>
-                      <span style={{ fontWeight: '600', color: '#1f2937' }}>{c.lastName}</span>
+                      <span style={{ fontWeight: '600', color: '#1f2937' }}>{customer.lastName}</span>
                     </td>
                     <td style={styles.td}>
-                      <span style={{ color: '#374151' }}>{c.address}</span>
+                      <span style={{ color: '#374151' }}>{customer.address}</span>
                     </td>
                     <td style={styles.td}>
-                      <span style={{ color: '#2563eb', fontWeight: '500' }}>{c.phone}</span>
+                      <span style={{ color: '#2563eb', fontWeight: '500' }}>{customer.phone}</span>
                     </td>
                     <td style={styles.td}>
                       <span style={styles.priceBadge}>
-                        {c.pricePerBidon} AZN
+                        {customer.pricePerBidon} AZN
                       </span>
                     </td>
-                    {/* <td style={styles.td}>
-                      <span style={styles.priceBadge}>
-                        {c.pricePerBidon} AZN
-                      </span>
-                    </td> */}
                     <td style={styles.td}>
-                      <button
-                        onClick={() => handleDeleteCustomer(c.id)}
-                        style={{
-                          background: '#ef4444',
-                          color: 'white',
-                          padding: '6px 12px',
-                          borderRadius: '8px',
-                          border: 'none',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          fontWeight: '500',
-                          transition: 'background 0.3s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.target.style.background = '#dc2626';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.target.style.background = '#ef4444';
-                        }}
-                      >
-                        Sil
-                      </button>
-                      <button
-                        onClick={() => handleEditCustomer(c)}
-                        style={{
-                          background: '#3b82f6',
-                          color: 'white',
-                          padding: '6px 12px',
-                          borderRadius: '8px',
-                          border: 'none',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          fontWeight: '500',
-                          marginRight: '8px',
-                          transition: 'background 0.3s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.target.style.background = '#2563eb';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.target.style.background = '#3b82f6';
-                        }}
-                      >
-                        Redaktə Et
-                      </button>
-
+                      <div style={styles.actionButtons}>
+                        <button
+                          onClick={() => handleEditCustomer(customer)}
+                          style={styles.editButton}
+                          title="Redaktə et"
+                        >
+                          <Edit size={14} />
+                          Redaktə
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCustomer(customer.id)}
+                          style={styles.deleteButton}
+                          disabled={isDeleting}
+                          title="Sil"
+                        >
+                          <Trash2 size={14} />
+                          Sil
+                        </button>
+                      </div>
                     </td>
-
                   </tr>
                 ))}
               </tbody>
@@ -783,6 +886,13 @@ function CustomerData() {
           )}
         </div>
       </div>
+
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

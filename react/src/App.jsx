@@ -20,58 +20,62 @@ export default function App() {
     <div className={`min-h-screen transition-colors duration-300 ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'
       }`}>
       <AuthProvider>
-        <OrdersProvider>
-          <Router>
-            <ScrollToTop />
-            <Routes>
-              {/* Default olaraq login səhifəsinə yönləndir */}
-              <Route path="/" element={<Navigate to="/login" replace />} />
+        <Router>
+          <ScrollToTop />
+          <Routes>
+            {/* Default olaraq login səhifəsinə yönləndir */}
+            <Route path="/" element={<Navigate to="/login" replace />} />
 
-              {/* Login səhifəsi */}
-              <Route path="/login" element={<Login />} />
+            {/* Login səhifəsi */}
+            <Route path="/login" element={<Login />} />
 
-              {/* Admin paneli, yalnız admin roluna icazə verilir */}
-              <Route
-                path="/dashboard"
-                element={
-                  <PrivateRoute >
+            {/* Admin paneli, yalnız admin roluna icazə verilir */}
+            <Route
+              path="/dashboard"
+              element={
+                <PrivateRoute >
+                  <OrdersProvider>
                     <Dashboard /> {/* Bura Layoutdur */}
-                  </PrivateRoute>
-                }
-              >
-                <Route index element={<CustomerPanel />} />
-                <Route path="customerpanel" element={<CustomerPanel />} />
-                <Route path="customer-database" element={<CustomerData />} />
-                <Route path="daily-process" element={<DashboardContent />} />
-                <Route path="balance" element={<BalancePanel />} />
-              </Route>
+                  </OrdersProvider>
+                </PrivateRoute>
+              }
+            >
+              <Route index element={<CustomerPanel />} />
+              <Route path="customerpanel" element={<CustomerPanel />} />
+              <Route path="customer-database" element={<CustomerData />} />
+              <Route path="daily-process" element={<DashboardContent />} />
+              <Route path="balance" element={<BalancePanel />} />
+            </Route>
 
-              {/* Private route for courier */}
-              <Route
-                path="/courier"
-                element={
-                  <PrivateRoute>
+            {/* Private route for courier */}
+            <Route
+              path="/courier"
+              element={
+                <PrivateRoute>
+                  <OrdersProvider>
                     <CourierPanel />
-                  </PrivateRoute>
-                }
-              />
+                  </OrdersProvider>
+                </PrivateRoute>
+              }
+            />
 
-              {/* Private route for regular user */}
-              <Route
-                path="/my-orders"
-                element={
-                  <PrivateRoute allowedRoles={['user']}>
+            {/* Private route for regular user */}
+            <Route
+              path="/my-orders"
+              element={
+                <PrivateRoute allowedRoles={['user']}>
+                  <OrdersProvider>
                     <Orders />
-                  </PrivateRoute>
-                }
-              />
+                  </OrdersProvider>
+                </PrivateRoute>
+              }
+            />
 
-              {/* Catch all - redirect to login if path not matched */}
-              <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
+            {/* Catch all - redirect to login if path not matched */}
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
 
-          </Router>
-        </OrdersProvider>
+        </Router>
       </AuthProvider>
     </div>
   );
