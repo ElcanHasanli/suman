@@ -4,7 +4,7 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({
-    baseUrl: 'http://localhost:5173', // Vite proxy üçün
+    baseUrl: import.meta.env.VITE_API_BASE_URL || '/api',
     prepareHeaders: (headers, { getState }) => {
       // Get token from auth state
       const token = getState().auth?.token;
@@ -24,7 +24,7 @@ export const apiSlice = createApi({
     // Auth endpoints
     login: builder.mutation({
       query: (credentials) => ({
-        url: '/api/users/login', // Vite proxy vasitəsilə /users/login-ə yönləndiriləcək
+        url: '/users/login', // relative to baseUrl
         method: 'POST',
         body: credentials,
       }),
@@ -33,7 +33,7 @@ export const apiSlice = createApi({
     
     register: builder.mutation({
       query: (userData) => ({
-        url: '/api/users/register', // Vite proxy vasitəsilə /users/register-ə yönləndiriləcək
+        url: '/users/register', // relative to baseUrl
         method: 'POST',
         body: userData,
       }),
@@ -41,7 +41,7 @@ export const apiSlice = createApi({
     }),
 
     getUserById: builder.query({
-      query: (id) => `/api/users/${id}`, // Vite proxy vasitəsilə /users/{id}-ə yönləndiriləcək
+      query: (id) => `/users/${id}`, // relative to baseUrl
       providesTags: (result, error, id) => [{ type: 'User', id }],
     }),
 
