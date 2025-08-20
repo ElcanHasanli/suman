@@ -26,44 +26,79 @@ function CustomerData() {
     pricePerBidon: '',
   });
 
-  // API hooks
-  const { data: customers = [], isLoading, error, refetch } = useGetCustomersQuery();
-  const { data: customerCount = 0 } = useGetCustomerCountQuery();
-  const [createCustomer, { isLoading: isCreating }] = useCreateCustomerMutation();
-  const [updateCustomer, { isLoading: isUpdating }] = useUpdateCustomerMutation();
-  const [deleteCustomer, { isLoading: isDeleting }] = useDeleteCustomerMutation();
+  // API hooks - müvəqqəti söndürüldü
+  // const { data: customers = [], isLoading, error, refetch } = useGetCustomersQuery();
+  // const { data: customerCount = 0 } = useGetCustomerCountQuery();
+  // const [createCustomer, { isLoading: isCreating }] = useCreateCustomerMutation();
+  // const [updateCustomer, { isLoading: isUpdating }] = useUpdateCustomerMutation();
+  // const [deleteCustomer, { isLoading: isDeleting }] = useDeleteCustomerMutation();
   
-  // Search hooks
-  const { data: phoneSearchResults = [] } = useSearchCustomerByPhoneQuery(searchTerm, {
-    skip: searchType !== 'phone' || !searchTerm
-  });
-  const { data: nameSearchResults = [] } = useSearchCustomerByNameSurnameQuery(
-    { name: searchTerm.split(' ')[0], surname: searchTerm.split(' ')[1] || '' },
-    { skip: searchType !== 'name' || !searchTerm }
-  );
+  // Mock data - müvəqqəti istifadə olunur
+  const [customers, setCustomers] = useState([
+    {
+      id: 1,
+      name: 'Ali',
+      surname: 'Məmmədov',
+      address: 'Bakı şəhəri, Nəsimi',
+      phoneNumber: '0511234567',
+      price: 5.0,
+      currency: 'AZN'
+    },
+    {
+      id: 2,
+      name: 'Leyla',
+      surname: 'Həsənova',
+      address: 'Yasamal rayonu, Şərifə Əliyeva 89',
+      phoneNumber: '0559876543',
+      price: 3.0,
+      currency: 'AZN'
+    }
+  ]);
 
-  // Export functionality
-  const { data: exportData } = useExportCustomersQuery(undefined, {
-    skip: true // Only fetch when needed
-  });
+  // Mock states
+  const isLoading = false;
+  const error = null;
+  const customerCount = customers.length;
+  const isCreating = false;
+  const isUpdating = false;
+  const isDeleting = false;
+  
+  // Search hooks - müvəqqəti söndürüldü
+  // const { data: phoneSearchResults = [] } = useSearchCustomerByPhoneQuery(searchTerm, {
+  //   skip: searchType !== 'phone' || !searchTerm
+  // });
+  // const { data: nameSearchResults = [] } = useSearchCustomerByNameSurnameQuery(
+  //   { name: searchTerm.split(' ')[0], surname: searchTerm.split(' ')[1] || '' },
+  //   { skip: searchType !== 'name' || !searchTerm }
+  // );
+
+  // Mock search results
+  const phoneSearchResults = [];
+  const nameSearchResults = [];
+
+  // Export functionality - müvəqqəti söndürüldü
+  // const { data: exportData } = useExportCustomersQuery(undefined, {
+  //   skip: true // Only fetch when needed
+  // });
 
   const handleEditCustomer = (customer) => {
     setShowForm(true);
     setEditMode(customer.id);
     setFormData({
-      firstName: customer.firstName || '',
-      lastName: customer.lastName || '',
+      firstName: customer.name || customer.firstName || '',
+      lastName: customer.surname || customer.lastName || '',
       address: customer.address || '',
-      phone: customer.phone || '',
-      pricePerBidon: customer.pricePerBidon || '',
+      phone: customer.phoneNumber || customer.phone || '',
+      pricePerBidon: customer.price || customer.pricePerBidon || '',
     });
   };
 
   const handleDeleteCustomer = async (id) => {
     if (window.confirm("Bu müştərini silmək istədiyinizə əminsiniz?")) {
       try {
-        await deleteCustomer(id).unwrap();
-        // Success message could be added here
+        // await deleteCustomer(id).unwrap(); // Original line commented out
+        // refetch(); // Original line commented out
+        alert('Silmə əməliyyatı müvəqqəti söndürüldü.');
       } catch (error) {
         alert('Müştəri silinərkən xəta baş verdi: ' + error.message);
       }
@@ -124,14 +159,31 @@ function CustomerData() {
     }
 
     try {
-      if (editMode) {
-        // Update customer
-        await updateCustomer({ id: editMode, firstName, lastName, address, phone, pricePerBidon: price }).unwrap();
-        setEditMode(null);
-      } else {
-        // Create new customer
-        await createCustomer({ firstName, lastName, address, phone, pricePerBidon: price }).unwrap();
-      }
+      // if (editMode) { // Original line commented out
+      //   // Update customer // Original line commented out
+      //   await updateCustomer({ // Original line commented out
+      //     id: editMode, // Original line commented out
+      //     name: firstName, // Original line commented out
+      //     surname: lastName, // Original line commented out
+      //     address, // Original line commented out
+      //     phoneNumber: phone, // Original line commented out
+      //     price: price // Original line commented out
+      //   }).unwrap(); // Original line commented out
+      //   refetch(); // Original line commented out
+      // } else { // Original line commented out
+        // Create new customer // Original line commented out
+        const newCustomer = { // Original line commented out
+          id: customers.length + 1, // Original line commented out
+          name: firstName, // Original line commented out
+          surname: lastName, // Original line commented out
+          address, // Original line commented out
+          phoneNumber: phone, // Original line commented out
+          price: price, // Original line commented out
+          currency: 'AZN' // Original line commented out
+        }; // Original line commented out
+        setCustomers(prev => [...prev, newCustomer]); // Original line commented out
+        // refetch(); // Original line commented out
+      // } // Original line commented out
 
       // Reset form
       setFormData({
@@ -142,9 +194,7 @@ function CustomerData() {
         pricePerBidon: '',
       });
       setShowForm(false);
-      
-      // Refetch customers
-      refetch();
+      setEditMode(null); // Clear edit mode after successful submission
     } catch (error) {
       alert('Xəta baş verdi: ' + error.message);
     }
@@ -181,24 +231,24 @@ function CustomerData() {
     switch (searchType) {
       case 'phone':
         return phoneSearchResults.length > 0 ? phoneSearchResults : customers.filter(c => 
-          c.phone && c.phone.includes(searchTerm)
+          (c.phoneNumber || c.phone) && (c.phoneNumber || c.phone).includes(searchTerm)
         );
       case 'name':
         return nameSearchResults.length > 0 ? nameSearchResults : customers.filter(c => {
-          const fullName = `${c.firstName || ''} ${c.lastName || ''}`.toLowerCase();
+          const fullName = `${c.name || c.firstName || ''} ${c.surname || c.lastName || ''}`.toLowerCase();
           return fullName.includes(searchTerm.toLowerCase());
         });
       default:
         return customers.filter(customer => {
           const search = searchTerm.toLowerCase().trim();
-          const fullName = `${customer.firstName || ""} ${customer.lastName || ""}`.toLowerCase();
+          const fullName = `${customer.name || customer.firstName || ""} ${customer.surname || customer.lastName || ""}`.toLowerCase();
           return (
             fullName.includes(search) ||
-            (customer.firstName && customer.firstName.toLowerCase().includes(search)) ||
-            (customer.lastName && customer.lastName.toLowerCase().includes(search)) ||
-            (customer.phone && customer.phone.toLowerCase().includes(search)) ||
+            ((customer.name || customer.firstName) && (customer.name || customer.firstName).toLowerCase().includes(search)) ||
+            ((customer.surname || customer.lastName) && (customer.surname || customer.lastName).toLowerCase().includes(search)) ||
+            ((customer.phoneNumber || customer.phone) && (customer.phoneNumber || customer.phone).toLowerCase().includes(search)) ||
             (customer.address && customer.address.toLowerCase().includes(search)) ||
-            (customer.pricePerBidon && customer.pricePerBidon.toString().includes(search))
+            ((customer.price || customer.pricePerBidon) && (customer.price || customer.pricePerBidon).toString().includes(search))
           );
         });
     }
@@ -539,21 +589,21 @@ function CustomerData() {
 
   const filteredCustomers = getFilteredCustomers();
 
-  // Authentication check - daha yumşaq yoxlama
-  if (!token) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.maxWidth}>
-          <div style={styles.errorState}>
-            <p>Giriş tələb olunur. Zəhmət olmasa yenidən giriş edin.</p>
-            <button onClick={() => window.location.href = '/login'} style={styles.retryButton}>
-              Giriş səhifəsinə keç
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Authentication check - müvəqqəti söndürüldü
+  // if (!isAuthenticated) {
+  //   return (
+  //     <div style={styles.container}>
+  //       <div style={styles.maxWidth}>
+  //         <div style={styles.errorState}>
+  //           <p>Giriş tələb olunur. Zəhmət olmasa yenidən giriş edin.</p>
+  //           <button onClick={() => window.location.href = '/login'} style={styles.retryButton}>
+  //             Giriş səhifəsinə keç
+  //           </button>
+  //         </div>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   // Loading state
   if (isLoading) {
@@ -576,7 +626,7 @@ function CustomerData() {
         <div style={styles.maxWidth}>
           <div style={styles.errorState}>
             <p>Xəta baş verdi: {error.message}</p>
-            <button onClick={() => refetch()} style={styles.retryButton}>
+            <button onClick={() => {/* refetch() */}} style={styles.retryButton}>
               Yenidən cəhd edin
             </button>
           </div>
@@ -826,20 +876,20 @@ function CustomerData() {
                     style={index % 2 === 0 ? styles.evenRow : styles.oddRow}
                   >
                     <td style={styles.td}>
-                      <span style={{ fontWeight: '600', color: '#1f2937' }}>{customer.firstName}</span>
+                      <span style={{ fontWeight: '600', color: '#1f2937' }}>{customer.name || customer.firstName}</span>
                     </td>
                     <td style={styles.td}>
-                      <span style={{ fontWeight: '600', color: '#1f2937' }}>{customer.lastName}</span>
+                      <span style={{ fontWeight: '600', color: '#1f2937' }}>{customer.surname || customer.lastName}</span>
                     </td>
                     <td style={styles.td}>
                       <span style={{ color: '#374151' }}>{customer.address}</span>
                     </td>
                     <td style={styles.td}>
-                      <span style={{ color: '#2563eb', fontWeight: '500' }}>{customer.phone}</span>
+                      <span style={{ color: '#2563eb', fontWeight: '500' }}>{customer.phoneNumber || customer.phone}</span>
                     </td>
                     <td style={styles.td}>
                       <span style={styles.priceBadge}>
-                        {customer.pricePerBidon} AZN
+                        {customer.price || customer.pricePerBidon} {customer.currency || 'AZN'}
                       </span>
                     </td>
                     <td style={styles.td}>

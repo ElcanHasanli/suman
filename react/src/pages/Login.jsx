@@ -295,7 +295,7 @@ export default function Login() {
             <div style={logoGlowStyle}></div>
           </div>
           <h1 style={titleStyle} className="title">SuMan</h1>
-          <p style={subtitleStyle} className="subtitle">Su idarəetmə sistemi</p>
+          <p style={subtitleStyle} className="subtitle">Su idarə etmə sistemi</p>
 
           {/* Premium Badge */}
           <div style={premiumBadgeStyle}>

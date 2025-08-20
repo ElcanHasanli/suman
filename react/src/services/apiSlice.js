@@ -6,8 +6,8 @@ export const apiSlice = createApi({
   baseQuery: fetchBaseQuery({
     baseUrl: import.meta.env.VITE_API_BASE_URL || '/api',
     prepareHeaders: (headers, { getState }) => {
-      // Get token from auth state
-      const token = getState().auth?.token;
+      // Get token from localStorage directly
+      const token = localStorage.getItem('token');
       if (token) {
         headers.set('Authorization', `Bearer ${token}`);
       }
@@ -45,194 +45,25 @@ export const apiSlice = createApi({
       providesTags: (result, error, id) => [{ type: 'User', id }],
     }),
 
-    // User endpoints
-    getProfile: builder.query({
-      query: () => '/api/users/profile',
-      providesTags: ['User'],
-    }),
-
-    updateProfile: builder.mutation({
-      query: (userData) => ({
-        url: '/api/users/profile',
-        method: 'PUT',
-        body: userData,
-      }),
-      invalidatesTags: ['User'],
-    }),
-
-    getUsers: builder.query({
-      query: (params) => ({
-        url: '/api/users',
-        params,
-      }),
-      providesTags: ['User'],
-    }),
-
-    getUserById: builder.query({
-      query: (id) => `/api/users/${id}`,
-      providesTags: (result, error, id) => [{ type: 'User', id }],
-    }),
-
-    createUser: builder.mutation({
-      query: (userData) => ({
-        url: '/api/users',
-        method: 'POST',
-        body: userData,
-      }),
-      invalidatesTags: ['User'],
-    }),
-
-    updateUser: builder.mutation({
-      query: ({ id, ...userData }) => ({
-        url: `/api/users/${id}`,
-        method: 'PUT',
-        body: userData,
-      }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'User', id }],
-    }),
-
-    deleteUser: builder.mutation({
-      query: (id) => ({
-        url: `/api/users/${id}`,
-        method: 'DELETE',
-      }),
-      invalidatesTags: ['User'],
-    }),
-
-    // Product endpoints
-    getProducts: builder.query({
-      query: (params) => ({
-        url: '/api/products',
-        params,
-      }),
-      providesTags: ['Product'],
-    }),
-
-    getProductById: builder.query({
-      query: (id) => `/api/products/${id}`,
-      providesTags: (result, error, id) => [{ type: 'Product', id }],
-    }),
-
-    createProduct: builder.mutation({
-      query: (productData) => ({
-        url: '/api/products',
-        method: 'POST',
-        body: productData,
-      }),
-      invalidatesTags: ['Product'],
-    }),
-
-    updateProduct: builder.mutation({
-      query: ({ id, ...productData }) => ({
-        url: `/api/products/${id}`,
-        method: 'PUT',
-        body: productData,
-      }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'Product', id }],
-    }),
-
-    deleteProduct: builder.mutation({
-      query: (id) => ({
-        url: `/api/products/${id}`,
-        method: 'DELETE',
-      }),
-      invalidatesTags: ['Product'],
-    }),
-
-    // Category endpoints
-    getCategories: builder.query({
-      query: () => '/api/categories',
-      providesTags: ['Category'],
-    }),
-
-    getCategoryById: builder.query({
-      query: (id) => `/api/categories/${id}`,
-      providesTags: (result, error, id) => [{ type: 'Category', id }],
-    }),
-
-    createCategory: builder.mutation({
-      query: (categoryData) => ({
-        url: '/api/categories',
-        method: 'POST',
-        body: categoryData,
-      }),
-      invalidatesTags: ['Category'],
-    }),
-
-    updateCategory: builder.mutation({
-      query: ({ id, ...categoryData }) => ({
-        url: `/api/categories/${id}`,
-        method: 'PUT',
-        body: categoryData,
-      }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'Category', id }],
-    }),
-
-    deleteCategory: builder.mutation({
-      query: (id) => ({
-        url: `/api/categories/${id}`,
-        method: 'DELETE',
-      }),
-      invalidatesTags: ['Category'],
-    }),
-
-    // Order endpoints
-    getOrders: builder.query({
-      query: (params) => ({
-        url: '/api/orders',
-        params,
-      }),
-      providesTags: ['Order'],
-    }),
-
-    getOrderById: builder.query({
-      query: (id) => `/api/orders/${id}`,
-      providesTags: (result, error, id) => [{ type: 'Order', id }],
-    }),
-
-    createOrder: builder.mutation({
-      query: (orderData) => ({
-        url: '/api/orders',
-        method: 'POST',
-        body: orderData,
-      }),
-      invalidatesTags: ['Order'],
-    }),
-
-    updateOrder: builder.mutation({
-      query: ({ id, ...orderData }) => ({
-        url: `/api/orders/${id}`,
-        method: 'PUT',
-        body: orderData,
-      }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'Order', id }],
-    }),
-
-    deleteOrder: builder.mutation({
-      query: (id) => ({
-        url: `/api/orders/${id}`,
-        method: 'DELETE',
-      }),
-      invalidatesTags: ['Order'],
-    }),
+    
 
     // Customer endpoints
     getCustomers: builder.query({
       query: (params) => ({
-        url: '/api/customers',
+        url: '/customers',
         params,
       }),
       providesTags: ['Customer'],
     }),
 
     getCustomerById: builder.query({
-      query: (id) => `/api/customers/${id}`,
+      query: (id) => `/customers/${id}`,
       providesTags: (result, error, id) => [{ type: 'Customer', id }],
     }),
 
     createCustomer: builder.mutation({
       query: (customerData) => ({
-        url: '/api/customers/add',
+        url: '/customers/add',
         method: 'POST',
         body: customerData,
       }),
@@ -241,7 +72,7 @@ export const apiSlice = createApi({
 
     updateCustomer: builder.mutation({
       query: ({ id, ...customerData }) => ({
-        url: `/api/customers/update/${id}`,
+        url: `/customers/update/${id}`,
         method: 'PATCH',
         body: customerData,
       }),
@@ -250,7 +81,7 @@ export const apiSlice = createApi({
 
     deleteCustomer: builder.mutation({
       query: (id) => ({
-        url: `/api/customers/delete/${id}`,
+        url: `/customers/delete/${id}`,
         method: 'DELETE',
       }),
       invalidatesTags: ['Customer'],
@@ -259,7 +90,7 @@ export const apiSlice = createApi({
     // Customer specific endpoints
     searchCustomerByPhone: builder.query({
       query: (phone) => ({
-        url: '/api/customers/search-by-phone',
+        url: '/customers/search-by-phone',
         params: { phone },
       }),
       providesTags: ['Customer'],
@@ -267,19 +98,19 @@ export const apiSlice = createApi({
 
     searchCustomerByNameSurname: builder.query({
       query: ({ name, surname }) => ({
-        url: '/api/customers/search-by-name-surname',
+        url: '/customers/search-by-name-surname',
         params: { name, surname },
       }),
       providesTags: ['Customer'],
     }),
 
     exportCustomers: builder.query({
-      query: () => '/api/customers/export',
+      query: () => '/customers/export',
       providesTags: ['Customer'],
     }),
 
     getCustomerCount: builder.query({
-      query: () => '/api/customers/count',
+      query: () => '/customers/count',
       providesTags: ['Customer'],
     }),
 
@@ -323,34 +154,9 @@ export const apiSlice = createApi({
       invalidatesTags: ['Courier'],
     }),
 
-    // Report endpoints
-    getReports: builder.query({
-      query: (params) => ({
-        url: '/api/reports',
-        params,
-      }),
-      providesTags: ['Report'],
-    }),
+    
 
-    generateReport: builder.mutation({
-      query: (reportParams) => ({
-        url: '/api/reports/generate',
-        method: 'POST',
-        body: reportParams,
-      }),
-      invalidatesTags: ['Report'],
-    }),
-
-    // Dashboard endpoints
-    getDashboardStats: builder.query({
-      query: () => '/api/dashboard/stats',
-      providesTags: ['Report'],
-    }),
-
-    getBalanceInfo: builder.query({
-      query: () => '/api/dashboard/balance',
-      providesTags: ['Report'],
-    }),
+   
 
     // File upload endpoints
     uploadFile: builder.mutation({
@@ -390,35 +196,7 @@ export const {
   useRegisterMutation,
   useRefreshTokenMutation,
   
-  // User hooks
-  useGetProfileQuery,
-  useUpdateProfileMutation,
-  useGetUsersQuery,
-  useGetUserByIdQuery,
-  useCreateUserMutation,
-  useUpdateUserMutation,
-  useDeleteUserMutation,
-  
-  // Product hooks
-  useGetProductsQuery,
-  useGetProductByIdQuery,
-  useCreateProductMutation,
-  useUpdateProductMutation,
-  useDeleteProductMutation,
-  
-  // Category hooks
-  useGetCategoriesQuery,
-  useGetCategoryByIdQuery,
-  useCreateCategoryMutation,
-  useUpdateCategoryMutation,
-  useDeleteCategoryMutation,
-  
-  // Order hooks
-  useGetOrdersQuery,
-  useGetOrderByIdQuery,
-  useCreateOrderMutation,
-  useUpdateOrderMutation,
-  useDeleteOrderMutation,
+
   
   // Customer hooks
   useGetCustomersQuery,
@@ -438,13 +216,7 @@ export const {
   useUpdateCourierMutation,
   useDeleteCourierMutation,
   
-  // Report hooks
-  useGetReportsQuery,
-  useGenerateReportMutation,
-  
-  // Dashboard hooks
-  useGetDashboardStatsQuery,
-  useGetBalanceInfoQuery,
+
   
   // File upload hooks
   useUploadFileMutation,
