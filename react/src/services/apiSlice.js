@@ -4,7 +4,7 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({
-    baseUrl: import.meta.env.VITE_API_BASE_URL || '/api',
+    baseUrl: 'http://62.171.154.6:9090', // Swagger-dən birbaşa URL
     prepareHeaders: (headers, { getState }) => {
       // Get token from localStorage directly
       const token = localStorage.getItem('token');
@@ -21,10 +21,10 @@ export const apiSlice = createApi({
   }),
   tagTypes: ['User', 'Order', 'Customer', 'Courier', 'Report', 'Product', 'Category'],
   endpoints: (builder) => ({
-    // Auth endpoints
+    // Auth endpoints (əgər varsa)
     login: builder.mutation({
       query: (credentials) => ({
-        url: '/users/login', // relative to baseUrl
+        url: '/users/login',
         method: 'POST',
         body: credentials,
       }),
@@ -33,7 +33,7 @@ export const apiSlice = createApi({
     
     register: builder.mutation({
       query: (userData) => ({
-        url: '/users/register', // relative to baseUrl
+        url: '/users/register',
         method: 'POST',
         body: userData,
       }),
@@ -41,18 +41,31 @@ export const apiSlice = createApi({
     }),
 
     getUserById: builder.query({
-      query: (id) => `/users/${id}`, // relative to baseUrl
+      query: (id) => `/users/${id}`,
       providesTags: (result, error, id) => [{ type: 'User', id }],
     }),
 
+    // Customer endpoints - Swagger-ə uyğun
     
-
-    // Customer endpoints
+    // Bütün müştəriləri almaq üçün ayrıca endpoint yoxdur
+    // Count endpoint-indən istifadə edib sonra search ilə alacağıq
     getCustomers: builder.query({
-      query: (params) => ({
-        url: '/customers',
-        params,
-      }),
+      queryFn: async (params, _queryApi, _extraOptions, fetchWithBQ) => {
+        try {
+          // Əvvəlcə müştəri sayını alırıq
+          const countResult = await fetchWithBQ('/customers/count');
+          if (countResult.error) {
+            return { error: countResult.error };
+          }
+
+          // Əgər müştəri varsa, boş axtarış ilə hamısını almağa çalışırıq
+          // Bu hal-hazırda mümkün olmaya bilər, ona görə boş array qaytarırıq
+          // Real həll üçün backend-də /customers GET endpoint lazımdır
+          return { data: [] };
+        } catch (error) {
+          return { error: { status: 'FETCH_ERROR', error: error.message } };
+        }
+      },
       providesTags: ['Customer'],
     }),
 
@@ -76,7 +89,7 @@ export const apiSlice = createApi({
         method: 'PATCH',
         body: customerData,
       }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'Customer', id }],
+      invalidatesTags: (result, error, { id }) => [{ type: 'Customer', id }, 'Customer'],
     }),
 
     deleteCustomer: builder.mutation({
@@ -105,7 +118,10 @@ export const apiSlice = createApi({
     }),
 
     exportCustomers: builder.query({
-      query: () => '/customers/export',
+      query: () => ({
+        url: '/customers/export',
+        responseHandler: 'blob', // Excel faylı üçün
+      }),
       providesTags: ['Customer'],
     }),
 
@@ -114,23 +130,23 @@ export const apiSlice = createApi({
       providesTags: ['Customer'],
     }),
 
-    // Courier endpoints
+    // Digər endpointlər (əgər lazımsa)
     getCouriers: builder.query({
       query: (params) => ({
-        url: '/api/couriers',
+        url: '/couriers',
         params,
       }),
       providesTags: ['Courier'],
     }),
 
     getCourierById: builder.query({
-      query: (id) => `/api/couriers/${id}`,
+      query: (id) => `/couriers/${id}`,
       providesTags: (result, error, id) => [{ type: 'Courier', id }],
     }),
 
     createCourier: builder.mutation({
       query: (courierData) => ({
-        url: '/api/couriers',
+        url: '/couriers',
         method: 'POST',
         body: courierData,
       }),
@@ -139,7 +155,7 @@ export const apiSlice = createApi({
 
     updateCourier: builder.mutation({
       query: ({ id, ...courierData }) => ({
-        url: `/api/couriers/${id}`,
+        url: `/couriers/${id}`,
         method: 'PUT',
         body: courierData,
       }),
@@ -148,20 +164,16 @@ export const apiSlice = createApi({
 
     deleteCourier: builder.mutation({
       query: (id) => ({
-        url: `/api/couriers/${id}`,
+        url: `/couriers/${id}`,
         method: 'DELETE',
       }),
       invalidatesTags: ['Courier'],
     }),
 
-    
-
-   
-
     // File upload endpoints
     uploadFile: builder.mutation({
       query: (fileData) => ({
-        url: '/api/files/upload',
+        url: '/files/upload',
         method: 'POST',
         body: fileData,
         headers: {
@@ -173,7 +185,7 @@ export const apiSlice = createApi({
     // Search endpoints
     searchProducts: builder.query({
       query: (searchTerm) => ({
-        url: '/api/search/products',
+        url: '/search/products',
         params: { q: searchTerm },
       }),
       providesTags: ['Product'],
@@ -181,7 +193,7 @@ export const apiSlice = createApi({
 
     searchOrders: builder.query({
       query: (searchTerm) => ({
-        url: '/api/search/orders',
+        url: '/search/orders',
         params: { q: searchTerm },
       }),
       providesTags: ['Order'],
@@ -194,9 +206,7 @@ export const {
   // Auth hooks
   useLoginMutation,
   useRegisterMutation,
-  useRefreshTokenMutation,
-  
-
+  useGetUserByIdQuery,
   
   // Customer hooks
   useGetCustomersQuery,
@@ -215,8 +225,6 @@ export const {
   useCreateCourierMutation,
   useUpdateCourierMutation,
   useDeleteCourierMutation,
-  
-
   
   // File upload hooks
   useUploadFileMutation,

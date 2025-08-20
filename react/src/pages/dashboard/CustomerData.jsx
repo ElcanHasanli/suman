@@ -26,60 +26,27 @@ function CustomerData() {
     pricePerBidon: '',
   });
 
-  // API hooks - müvəqqəti söndürüldü
-  // const { data: customers = [], isLoading, error, refetch } = useGetCustomersQuery();
-  // const { data: customerCount = 0 } = useGetCustomerCountQuery();
-  // const [createCustomer, { isLoading: isCreating }] = useCreateCustomerMutation();
-  // const [updateCustomer, { isLoading: isUpdating }] = useUpdateCustomerMutation();
-  // const [deleteCustomer, { isLoading: isDeleting }] = useDeleteCustomerMutation();
+  // API hooks - indi aktiv
+  const { data: customers = [], isLoading, error, refetch } = useGetCustomersQuery();
+  const { data: customerCount = 0 } = useGetCustomerCountQuery();
+  const [createCustomer, { isLoading: isCreating }] = useCreateCustomerMutation();
+  const [updateCustomer, { isLoading: isUpdating }] = useUpdateCustomerMutation();
+  const [deleteCustomer, { isLoading: isDeleting }] = useDeleteCustomerMutation();
   
-  // Mock data - müvəqqəti istifadə olunur
-  const [customers, setCustomers] = useState([
-    {
-      id: 1,
-      name: 'Ali',
-      surname: 'Məmmədov',
-      address: 'Bakı şəhəri, Nəsimi',
-      phoneNumber: '0511234567',
-      price: 5.0,
-      currency: 'AZN'
-    },
-    {
-      id: 2,
-      name: 'Leyla',
-      surname: 'Həsənova',
-      address: 'Yasamal rayonu, Şərifə Əliyeva 89',
-      phoneNumber: '0559876543',
-      price: 3.0,
-      currency: 'AZN'
-    }
-  ]);
+  // Search hooks - indi aktiv
+  const { data: phoneSearchResults = [] } = useSearchCustomerByPhoneQuery(searchTerm, {
+    skip: searchType !== 'phone' || !searchTerm
+  });
+  const { data: nameSearchResults = [] } = useSearchCustomerByNameSurnameQuery(
+    { name: searchTerm.split(' ')[0], surname: searchTerm.split(' ')[1] || '' },
+    { skip: searchType !== 'name' || !searchTerm }
+  );
 
-  // Mock states
-  const isLoading = false;
-  const error = null;
-  const customerCount = customers.length;
-  const isCreating = false;
-  const isUpdating = false;
-  const isDeleting = false;
-  
-  // Search hooks - müvəqqəti söndürüldü
-  // const { data: phoneSearchResults = [] } = useSearchCustomerByPhoneQuery(searchTerm, {
-  //   skip: searchType !== 'phone' || !searchTerm
-  // });
-  // const { data: nameSearchResults = [] } = useSearchCustomerByNameSurnameQuery(
-  //   { name: searchTerm.split(' ')[0], surname: searchTerm.split(' ')[1] || '' },
-  //   { skip: searchType !== 'name' || !searchTerm }
-  // );
-
-  // Mock search results
-  const phoneSearchResults = [];
-  const nameSearchResults = [];
-
-  // Export functionality - müvəqqəti söndürüldü
-  // const { data: exportData } = useExportCustomersQuery(undefined, {
-  //   skip: true // Only fetch when needed
-  // });
+  // Export functionality
+  const [exportTrigger, setExportTrigger] = useState(false);
+  const { data: exportData } = useExportCustomersQuery(undefined, {
+    skip: !exportTrigger
+  });
 
   const handleEditCustomer = (customer) => {
     setShowForm(true);
@@ -96,11 +63,12 @@ function CustomerData() {
   const handleDeleteCustomer = async (id) => {
     if (window.confirm("Bu müştərini silmək istədiyinizə əminsiniz?")) {
       try {
-        // await deleteCustomer(id).unwrap(); // Original line commented out
-        // refetch(); // Original line commented out
-        alert('Silmə əməliyyatı müvəqqəti söndürüldü.');
+        await deleteCustomer(id).unwrap();
+        refetch();
+        alert('Müştəri uğurla silindi!');
       } catch (error) {
-        alert('Müştəri silinərkən xəta baş verdi: ' + error.message);
+        console.error('Delete error:', error);
+        alert('Müştəri silinərkən xəta baş verdi: ' + (error.data?.message || error.message));
       }
     }
   };
@@ -159,31 +127,26 @@ function CustomerData() {
     }
 
     try {
-      // if (editMode) { // Original line commented out
-      //   // Update customer // Original line commented out
-      //   await updateCustomer({ // Original line commented out
-      //     id: editMode, // Original line commented out
-      //     name: firstName, // Original line commented out
-      //     surname: lastName, // Original line commented out
-      //     address, // Original line commented out
-      //     phoneNumber: phone, // Original line commented out
-      //     price: price // Original line commented out
-      //   }).unwrap(); // Original line commented out
-      //   refetch(); // Original line commented out
-      // } else { // Original line commented out
-        // Create new customer // Original line commented out
-        const newCustomer = { // Original line commented out
-          id: customers.length + 1, // Original line commented out
-          name: firstName, // Original line commented out
-          surname: lastName, // Original line commented out
-          address, // Original line commented out
-          phoneNumber: phone, // Original line commented out
-          price: price, // Original line commented out
-          currency: 'AZN' // Original line commented out
-        }; // Original line commented out
-        setCustomers(prev => [...prev, newCustomer]); // Original line commented out
-        // refetch(); // Original line commented out
-      // } // Original line commented out
+      const customerData = {
+        name: firstName,
+        surname: lastName,
+        address,
+        phoneNumber: phone,
+        price: price
+      };
+
+      if (editMode) {
+        // Update customer
+        await updateCustomer({
+          id: editMode,
+          ...customerData
+        }).unwrap();
+        alert('Müştəri məlumatları uğurla yeniləndi!');
+      } else {
+        // Create new customer
+        await createCustomer(customerData).unwrap();
+        alert('Yeni müştəri uğurla əlavə edildi!');
+      }
 
       // Reset form
       setFormData({
@@ -194,17 +157,22 @@ function CustomerData() {
         pricePerBidon: '',
       });
       setShowForm(false);
-      setEditMode(null); // Clear edit mode after successful submission
+      setEditMode(null);
+      refetch();
     } catch (error) {
-      alert('Xəta baş verdi: ' + error.message);
+      console.error('Submit error:', error);
+      alert('Xəta baş verdi: ' + (error.data?.message || error.message));
     }
   };
 
   const handleExportCustomers = async () => {
     try {
-      const response = await fetch('/api/customers/export', {
+      setExportTrigger(true);
+      
+      // Export endpoint-dən birbaşa fayl yükləmə
+      const response = await fetch('http://62.171.154.6:9090/customers/export', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${token}`,
         },
       });
       
@@ -218,9 +186,15 @@ function CustomerData() {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
+        alert('Müştəri siyahısı uğurla export edildi!');
+      } else {
+        throw new Error('Export failed');
       }
     } catch (error) {
+      console.error('Export error:', error);
       alert('Export xətası: ' + error.message);
+    } finally {
+      setExportTrigger(false);
     }
   };
 
@@ -576,34 +550,34 @@ function CustomerData() {
       padding: '64px 24px',
       color: '#ef4444'
     },
-          retryButton: {
-        background: '#3b82f6',
-        color: 'white',
-        padding: '12px 24px',
-        borderRadius: '8px',
-        border: 'none',
-        cursor: 'pointer',
-        marginTop: '16px'
-      }
-    };
+    retryButton: {
+      background: '#3b82f6',
+      color: 'white',
+      padding: '12px 24px',
+      borderRadius: '8px',
+      border: 'none',
+      cursor: 'pointer',
+      marginTop: '16px'
+    }
+  };
 
   const filteredCustomers = getFilteredCustomers();
 
-  // Authentication check - müvəqqəti söndürüldü
-  // if (!isAuthenticated) {
-  //   return (
-  //     <div style={styles.container}>
-  //       <div style={styles.maxWidth}>
-  //         <div style={styles.errorState}>
-  //           <p>Giriş tələb olunur. Zəhmət olmasa yenidən giriş edin.</p>
-  //           <button onClick={() => window.location.href = '/login'} style={styles.retryButton}>
-  //             Giriş səhifəsinə keç
-  //           </button>
-  //         </div>
-  //       </div>
-  //     </div>
-  //   );
-  // }
+  // Authentication check
+  if (!isAuthenticated) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.maxWidth}>
+          <div style={styles.errorState}>
+            <p>Giriş tələb olunur. Zəhmət olmasa yenidən giriş edin.</p>
+            <button onClick={() => window.location.href = '/login'} style={styles.retryButton}>
+              Giriş səhifəsinə keç
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Loading state
   if (isLoading) {
@@ -625,8 +599,8 @@ function CustomerData() {
       <div style={styles.container}>
         <div style={styles.maxWidth}>
           <div style={styles.errorState}>
-            <p>Xəta baş verdi: {error.message}</p>
-            <button onClick={() => {/* refetch() */}} style={styles.retryButton}>
+            <p>Xəta baş verdi: {error.data?.message || error.message}</p>
+            <button onClick={() => refetch()} style={styles.retryButton}>
               Yenidən cəhd edin
             </button>
           </div>
@@ -941,8 +915,8 @@ function CustomerData() {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
-        }
-      `}</style>
+          }
+        `}</style>
     </div>
   );
 }

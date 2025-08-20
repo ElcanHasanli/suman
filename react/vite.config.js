@@ -6,6 +6,6 @@ export default defineConfig({
   plugins: [react()],
   // Proxy ləğv edildi — birbaşa backend URL istifadə olunacaq
   define: {
-    'import.meta.env.VITE_API_BASE_URL': JSON.stringify('http://194.163.173.179:9090')
+    'import.meta.env.VITE_API_BASE_URL': JSON.stringify('http://62.171.154.6:9090')
   }
 })
