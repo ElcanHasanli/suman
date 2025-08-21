@@ -5,17 +5,8 @@ export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({
     baseUrl: 'http://62.171.154.6:9090', // Swagger-dən birbaşa URL
-    prepareHeaders: (headers, { getState }) => {
-      // Get token from localStorage directly
-      const token = localStorage.getItem('token');
-      if (token) {
-        headers.set('Authorization', `Bearer ${token}`);
-      }
+    prepareHeaders: (headers) => {
       headers.set('Content-Type', 'application/json');
-      
-      // Debug üçün
-      console.log('Request headers:', Object.fromEntries(headers.entries()));
-      
       return headers;
     },
   }),
@@ -46,21 +37,13 @@ export const apiSlice = createApi({
     }),
 
     // Customer endpoints - Swagger-ə uyğun
-    
-    // Bütün müştəriləri almaq üçün ayrıca endpoint yoxdur
-    // Count endpoint-indən istifadə edib sonra search ilə alacağıq
+    // Backend-də /customers GET endpoint olmadığı üçün boş array qaytarırıq
+    // Real həll üçün backend-də /customers GET endpoint lazımdır
     getCustomers: builder.query({
-      queryFn: async (params, _queryApi, _extraOptions, fetchWithBQ) => {
+      queryFn: async () => {
         try {
-          // Əvvəlcə müştəri sayını alırıq
-          const countResult = await fetchWithBQ('/customers/count');
-          if (countResult.error) {
-            return { error: countResult.error };
-          }
-
-          // Əgər müştəri varsa, boş axtarış ilə hamısını almağa çalışırıq
-          // Bu hal-hazırda mümkün olmaya bilər, ona görə boş array qaytarırıq
-          // Real həll üçün backend-də /customers GET endpoint lazımdır
+          // Backend-də /customers GET endpoint olmadığı üçün boş array qaytarırıq
+          // Bu endpoint backend-də əlavə edilməlidir
           return { data: [] };
         } catch (error) {
           return { error: { status: 'FETCH_ERROR', error: error.message } };

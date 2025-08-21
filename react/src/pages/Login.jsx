@@ -173,7 +173,7 @@ export default function Login() {
         
         console.log('User data for navigation:', userData); // Debug üçün
         
-        login(userData, result.token || 'temp-token'); // Token yoxdursa temporary token
+        login(userData); // Token olmadan login
         setFoundUser(userData);
         setSuccess(true);
         setIsLoading(false);

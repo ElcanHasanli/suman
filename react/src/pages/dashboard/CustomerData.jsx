@@ -13,7 +13,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 
 function CustomerData() {
-  const { token, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [editMode, setEditMode] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -29,6 +29,29 @@ function CustomerData() {
   // API hooks - indi aktiv
   const { data: customers = [], isLoading, error, refetch } = useGetCustomersQuery();
   const { data: customerCount = 0 } = useGetCustomerCountQuery();
+  
+  // Test data - backend hazır olana qədər
+  const testCustomers = [
+    {
+      id: 1,
+      name: "Əli",
+      surname: "Məmmədov",
+      address: "Bakı şəhəri, Nərimanov rayonu",
+      phoneNumber: "+994501234567",
+      price: 5.50
+    },
+    {
+      id: 2,
+      name: "Aysu",
+      surname: "Hüseynova",
+      address: "Bakı şəhəri, Yasamal rayonu",
+      phoneNumber: "+994507654321",
+      price: 6.00
+    }
+  ];
+  
+  // Əgər customers boşdursa, test data istifadə et
+  const displayCustomers = customers.length > 0 ? customers : testCustomers;
   const [createCustomer, { isLoading: isCreating }] = useCreateCustomerMutation();
   const [updateCustomer, { isLoading: isUpdating }] = useUpdateCustomerMutation();
   const [deleteCustomer, { isLoading: isDeleting }] = useDeleteCustomerMutation();
@@ -89,6 +112,8 @@ function CustomerData() {
       } else {
         setSearchType('general');
       }
+    } else {
+      setSearchType('general');
     }
   };
 
@@ -170,11 +195,7 @@ function CustomerData() {
       setExportTrigger(true);
       
       // Export endpoint-dən birbaşa fayl yükləmə
-      const response = await fetch('http://62.171.154.6:9090/customers/export', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const response = await fetch('http://62.171.154.6:9090/customers/export');
       
       if (response.ok) {
         const blob = await response.blob();
@@ -200,32 +221,30 @@ function CustomerData() {
 
   // Filtered customers based on search
   const getFilteredCustomers = () => {
-    if (!searchTerm) return customers;
+    if (!searchTerm) return displayCustomers;
 
-    switch (searchType) {
-      case 'phone':
-        return phoneSearchResults.length > 0 ? phoneSearchResults : customers.filter(c => 
-          (c.phoneNumber || c.phone) && (c.phoneNumber || c.phone).includes(searchTerm)
-        );
-      case 'name':
-        return nameSearchResults.length > 0 ? nameSearchResults : customers.filter(c => {
-          const fullName = `${c.name || c.firstName || ''} ${c.surname || c.lastName || ''}`.toLowerCase();
-          return fullName.includes(searchTerm.toLowerCase());
-        });
-      default:
-        return customers.filter(customer => {
-          const search = searchTerm.toLowerCase().trim();
-          const fullName = `${customer.name || customer.firstName || ""} ${customer.surname || customer.lastName || ""}`.toLowerCase();
-          return (
-            fullName.includes(search) ||
-            ((customer.name || customer.firstName) && (customer.name || customer.firstName).toLowerCase().includes(search)) ||
-            ((customer.surname || customer.lastName) && (customer.surname || customer.lastName).toLowerCase().includes(search)) ||
-            ((customer.phoneNumber || customer.phone) && (customer.phoneNumber || customer.phone).toLowerCase().includes(search)) ||
-            (customer.address && customer.address.toLowerCase().includes(search)) ||
-            ((customer.price || customer.pricePerBidon) && (customer.price || customer.pricePerBidon).toString().includes(search))
-          );
-        });
+    // Əgər search type phone və ya name-dirsə, API search istifadə et
+    if (searchType === 'phone' && phoneSearchResults.length > 0) {
+      return phoneSearchResults;
     }
+    
+    if (searchType === 'name' && nameSearchResults.length > 0) {
+      return nameSearchResults;
+    }
+
+    // Əks halda local filter istifadə et
+    return displayCustomers.filter(customer => {
+      const search = searchTerm.toLowerCase().trim();
+      const fullName = `${customer.name || customer.firstName || ""} ${customer.surname || customer.lastName || ""}`.toLowerCase();
+      return (
+        fullName.includes(search) ||
+        ((customer.name || customer.firstName) && (customer.name || customer.firstName).toLowerCase().includes(search)) ||
+        ((customer.surname || customer.lastName) && (customer.surname || customer.lastName).toLowerCase().includes(search)) ||
+        ((customer.phoneNumber || customer.phone) && (customer.phoneNumber || customer.phone).toLowerCase().includes(search)) ||
+        (customer.address && customer.address.toLowerCase().includes(search)) ||
+        ((customer.price || customer.pricePerBidon) && (customer.price || customer.pricePerBidon).toString().includes(search))
+      );
+    });
   };
 
   const styles = {
@@ -625,7 +644,7 @@ function CustomerData() {
               </div>
             </div>
             <div style={styles.statsBox}>
-              <p style={styles.statsText}>Cəmi Müştəri: {customerCount}</p>
+              <p style={styles.statsText}>Cəmi Müştəri: {displayCustomers.length}</p>
             </div>
           </div>
 
@@ -649,7 +668,7 @@ function CustomerData() {
             <button
               onClick={handleExportCustomers}
               style={styles.exportButton}
-              disabled={customers.length === 0}
+              disabled={displayCustomers.length === 0}
             >
               <Download size={20} />
               <span>Excel Export</span>
@@ -658,7 +677,7 @@ function CustomerData() {
         </div>
 
         {/* Search Section */}
-        {customers.length > 0 && (
+        {displayCustomers.length > 0 && (
           <div style={styles.searchCard}>
             <div style={styles.searchContainer}>
               <div style={styles.searchIcon}>
@@ -893,7 +912,7 @@ function CustomerData() {
             </table>
           </div>
 
-          {filteredCustomers.length === 0 && customers.length > 0 && (
+          {filteredCustomers.length === 0 && displayCustomers.length > 0 && (
             <div style={styles.emptyState}>
               <Search size={64} color="#d1d5db" style={{ margin: '0 auto 16px' }} />
               <h3 style={styles.emptyTitle}>Axtarış nəticəsi tapılmadı</h3>
@@ -901,7 +920,7 @@ function CustomerData() {
             </div>
           )}
 
-          {customers.length === 0 && (
+          {displayCustomers.length === 0 && (
             <div style={styles.emptyState}>
               <Users size={64} color="#d1d5db" style={{ margin: '0 auto 16px' }} />
               <h3 style={styles.emptyTitle}>Hələ müştəri yoxdur</h3>
