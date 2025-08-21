@@ -37,18 +37,8 @@ export const apiSlice = createApi({
     }),
 
     // Customer endpoints - Swagger-ə uyğun
-    // Backend-də /customers GET endpoint olmadığı üçün boş array qaytarırıq
-    // Real həll üçün backend-də /customers GET endpoint lazımdır
     getCustomers: builder.query({
-      queryFn: async () => {
-        try {
-          // Backend-də /customers GET endpoint olmadığı üçün boş array qaytarırıq
-          // Bu endpoint backend-də əlavə edilməlidir
-          return { data: [] };
-        } catch (error) {
-          return { error: { status: 'FETCH_ERROR', error: error.message } };
-        }
-      },
+      query: () => '/customers/all',
       providesTags: ['Customer'],
     }),
 
@@ -110,6 +100,12 @@ export const apiSlice = createApi({
 
     getCustomerCount: builder.query({
       query: () => '/customers/count',
+      providesTags: ['Customer'],
+    }),
+
+    // Additional customer endpoints
+    getAllCustomers: builder.query({
+      query: () => '/customers/all',
       providesTags: ['Customer'],
     }),
 
@@ -201,6 +197,7 @@ export const {
   useSearchCustomerByNameSurnameQuery,
   useExportCustomersQuery,
   useGetCustomerCountQuery,
+  useGetAllCustomersQuery,
   
   // Courier hooks
   useGetCouriersQuery,
