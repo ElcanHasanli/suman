@@ -12,6 +12,54 @@ import CourierPanel from './pages/CourierPanel';
 import DashboardContent from './pages/dashboard/DashboardContent';
 import { useDarkMode } from './components/useDarkMode';
 import ScrollToTop from "./components/ScrollToTop";
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
+// Global styles for animated input effects and font family
+const globalStyles = `
+  * {
+    font-family: 'Inter', 'Roboto', 'Helvetica Neue', 'Arial', sans-serif;
+  }
+
+  .input-wrapper input:focus ~ .bottom {
+    transform-origin: bottom left;
+    transform: scaleX(1);
+  }
+
+  .input-wrapper input:focus ~ .right {
+    transform-origin: bottom right;
+    transform: scaleY(1);
+  }
+
+  .input-wrapper input:focus ~ .top {
+    transform-origin: top right;
+    transform: scaleX(1);
+  }
+
+  .input-wrapper input:focus ~ .left {
+    transform-origin: top left;
+    transform: scaleY(1);
+  }
+
+  /* Mobile responsiveness */
+  @media (max-width: 767px) {
+    body {
+      overflow-x: hidden;
+    }
+    
+    .dashboard-container {
+      flex-direction: column;
+    }
+    
+    .sidebar-mobile {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+    }
+  }
+`;
 
 export default function App() {
   const { isDarkMode } = useDarkMode();
@@ -74,6 +122,23 @@ export default function App() {
             {/* Catch all - redirect to login if path not matched */}
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
+
+          {/* Toast Container - bütün tətbiqdə toast bildirişləri üçün */}
+          <ToastContainer
+            position="top-right"
+            autoClose={3000}
+            hideProgressBar={false}
+            newestOnTop={false}
+            closeOnClick
+            rtl={false}
+            pauseOnFocusLoss
+            draggable
+            pauseOnHover
+            theme={isDarkMode ? "dark" : "light"}
+          />
+
+          {/* Global Styles */}
+          <style>{globalStyles}</style>
 
         </Router>
       </AuthProvider>

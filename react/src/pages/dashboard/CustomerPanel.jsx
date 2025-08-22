@@ -1,6 +1,7 @@
 import { useState, useContext } from 'react';
 import { Plus, Package, Users, User, Phone, MapPin, DollarSign, Calendar, Droplets, Search, X } from 'lucide-react';
 import { OrdersContext } from '../../contexts/OrdersContext';
+import { toast } from 'react-toastify';
 
 function CustomerPanel() {
   const { orders = [], setOrders, customers = [], couriers = [] } = useContext(OrdersContext);
@@ -110,7 +111,7 @@ function CustomerPanel() {
     const { customerId, date, bidonOrdered, courierId } = newOrder;
 
     if (!customerId || !date || !bidonOrdered || !courierId) {
-      alert('Zəhmət olmasa bütün sahələri doldurun!');
+      toast.warning('Zəhmət olmasa bütün sahələri doldurun!');
       return;
     }
 

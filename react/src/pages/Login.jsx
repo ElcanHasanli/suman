@@ -36,7 +36,7 @@ export default function Login() {
       ? 'linear-gradient(135deg, #1f2937, #111827)'
       : 'linear-gradient(135deg, #3b82f6, #2563eb)',
     overflow: 'hidden', // scroll olmasın
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+    fontFamily: "'Inter', 'Roboto', 'Helvetica Neue', 'Arial', sans-serif",
     color: 'white',
   });
 

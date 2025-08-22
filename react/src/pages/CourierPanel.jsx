@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Package, Clock, CheckCircle, MapPin, CreditCard, Banknote, Calendar, LogOut, Eye, Moon, Sun } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { toast } from 'react-toastify';
 const KuryerSistemi = () => {
   const [currentUser, setCurrentUser] = useState('kuryer1');
   const [sifarishler, setSifarishler] = useState([]);
@@ -66,7 +67,7 @@ const KuryerSistemi = () => {
 
   const completeOrder = () => {
     if (!deliveryData.bidonSayi || !deliveryData.mebleg) {
-      alert('Bütün məlumatları doldurun!');
+      toast.warning('Bütün məlumatları doldurun!');
       return;
     }
 
@@ -86,7 +87,7 @@ const KuryerSistemi = () => {
     setSelectedOrder(null);
     setDeliveryData({ bidonSayi: '', mebleg: '', odenisNovu: 'nagd' });
 
-    alert('Sifariş uğurla tamamlandı!');
+    toast.success('Sifariş uğurla tamamlandı!');
   };
 
   const filteredSifarishler = sifarishler.filter(order => order.kuryer === currentUser);
