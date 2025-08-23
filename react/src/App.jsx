@@ -10,6 +10,7 @@ import CustomerData from './pages/dashboard/CustomerData';
 import Orders from './pages/Orders';
 import CourierPanel from './pages/CourierPanel';
 import DashboardContent from './pages/dashboard/DashboardContent';
+import Payments from './pages/dashboard/Payments';
 import { useDarkMode } from './components/useDarkMode';
 import ScrollToTop from "./components/ScrollToTop";
 import { ToastContainer } from 'react-toastify';
@@ -93,6 +94,7 @@ export default function App() {
               <Route path="customer-database" element={<CustomerData />} />
               <Route path="daily-process" element={<DashboardContent />} />
               <Route path="balance" element={<BalancePanel />} />
+              <Route path="payments" element={<Payments />} />
             </Route>
 
             {/* Private route for courier */}

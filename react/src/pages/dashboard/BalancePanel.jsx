@@ -1,16 +1,60 @@
-import { useState, useContext, useMemo } from 'react';
+import { useContext, useMemo } from 'react';
 import { Users, DollarSign, Droplets, CreditCard, AlertCircle, CheckCircle, TrendingUp, Calculator } from 'lucide-react';
 import { OrdersContext } from '../../contexts/OrdersContext';
 
 function BalancePanel() {
   const { orders = [], customers = [] } = useContext(OrdersContext);
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  // const [selectedCustomer, setSelectedCustomer] = useState(null); // Hələ istifadə edilmir
+
+  // Test məlumatları - backend hazır olduqda real API-dən gələcək
+  const testOrders = [
+    {
+      id: 1,
+      customerId: 1,
+      date: '2024-01-15',
+      bidonOrdered: 10,
+      bidonReturned: 8,
+      paymentMethod: 'cash',
+      completed: true
+    },
+    {
+      id: 2,
+      customerId: 2,
+      date: '2024-01-15',
+      bidonOrdered: 15,
+      bidonReturned: 0,
+      paymentMethod: 'credit',
+      completed: false
+    },
+    {
+      id: 3,
+      customerId: 3,
+      date: '2024-01-15',
+      bidonOrdered: 8,
+      bidonReturned: 6,
+      paymentMethod: 'cash',
+      completed: true
+    }
+  ];
+
+  // Test müştəri məlumatları - backend hazır olduqda real API-dən gələcək
+  const testCustomers = [
+    { id: 1, firstName: 'Elcan', lastName: 'Hasanli', phone: '+994505556232', pricePerBidon: 5 },
+    { id: 2, firstName: 'Nicat', lastName: 'Məmmədov', phone: '+994551234567', pricePerBidon: 4 },
+    { id: 3, firstName: 'Rəşad', lastName: 'Əliyev', phone: '+994701234567', pricePerBidon: 6 }
+  ];
+
+  // Əgər customers boşdursa, test məlumatlarından istifadə edirik
+  const displayCustomers = customers.length > 0 ? customers : testCustomers;
+
+  // Əgər orders boşdursa, test məlumatlarından istifadə edirik
+  const displayOrders = orders.length > 0 ? orders : testOrders;
 
   // Hər müştəri üçün qalıqları hesabla
 const customerBalances = useMemo(() => {
-  return customers
+  return displayCustomers
     .map(customer => {
-      const customerOrders = orders.filter(order => order.customerId === customer.id);
+      const customerOrders = displayOrders.filter(order => order.customerId === customer.id);
 
       if (customerOrders.length === 0) return null; // <-- Əgər sifarişi yoxdursa, keç
 
@@ -51,7 +95,7 @@ const customerBalances = useMemo(() => {
       };
     })
     .filter(Boolean); // <-- `null` olanları (yəni sifarişsizləri) sil
-}, [customers, orders]);
+}, [displayCustomers, displayOrders]);
 
 
   // Statistikalar

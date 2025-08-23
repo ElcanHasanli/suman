@@ -82,6 +82,22 @@ export default function DashboardSidebar({ isMobile = false, onMobileClose }) {
           <span>Müştəri Bazası</span>
         </NavLink>
         <NavLink 
+          to="/dashboard/customerpanel" 
+          style={menuItemStyle} 
+          className="sidebar-nav-link"
+          onClick={handleNavClick}
+        >
+          <span>Sifarişlər</span>
+        </NavLink>
+        <NavLink 
+          to="/dashboard/daily-process" 
+          style={menuItemStyle} 
+          className="sidebar-nav-link"
+          onClick={handleNavClick}
+        >
+          <span>Günlük Proseslər</span>
+        </NavLink>
+        <NavLink 
           to="/dashboard/payments" 
           style={menuItemStyle} 
           className="sidebar-nav-link"
@@ -97,22 +113,8 @@ export default function DashboardSidebar({ isMobile = false, onMobileClose }) {
         >
           <span>Qalıqlar</span>
         </NavLink>
-        <NavLink 
-          to="/dashboard/daily-process" 
-          style={menuItemStyle} 
-          className="sidebar-nav-link"
-          onClick={handleNavClick}
-        >
-          <span>Günlük Proseslər</span>
-        </NavLink>
-        <NavLink 
-          to="/dashboard/customerpanel" 
-          style={menuItemStyle} 
-          className="sidebar-nav-link"
-          onClick={handleNavClick}
-        >
-          <span>Sifarişlər</span>
-        </NavLink>
+        
+     
         <NavLink 
           to="/login" 
           style={menuItemStyle} 

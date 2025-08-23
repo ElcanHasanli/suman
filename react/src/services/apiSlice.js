@@ -109,45 +109,14 @@ export const apiSlice = createApi({
       providesTags: ['Customer'],
     }),
 
-    // Digər endpointlər (əgər lazımsa)
-    getCouriers: builder.query({
-      query: (params) => ({
-        url: '/couriers',
-        params,
-      }),
-      providesTags: ['Courier'],
-    }),
-
-    getCourierById: builder.query({
-      query: (id) => `/couriers/${id}`,
-      providesTags: (result, error, id) => [{ type: 'Courier', id }],
-    }),
-
-    createCourier: builder.mutation({
-      query: (courierData) => ({
-        url: '/couriers',
-        method: 'POST',
-        body: courierData,
-      }),
-      invalidatesTags: ['Courier'],
-    }),
-
-    updateCourier: builder.mutation({
-      query: ({ id, ...courierData }) => ({
-        url: `/couriers/${id}`,
-        method: 'PUT',
-        body: courierData,
-      }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'Courier', id }],
-    }),
-
-    deleteCourier: builder.mutation({
-      query: (id) => ({
-        url: `/couriers/${id}`,
-        method: 'DELETE',
-      }),
-      invalidatesTags: ['Courier'],
-    }),
+    // Courier endpoints - hələ hazır deyil, test məlumatlarından istifadə edirik
+    // getCouriers: builder.query({
+    //   query: (params) => ({
+    //     url: '/couriers',
+    //     params,
+    //   }),
+    //   providesTags: ['Courier'],
+    // }),
 
     // File upload endpoints
     uploadFile: builder.mutation({
@@ -177,6 +146,67 @@ export const apiSlice = createApi({
       }),
       providesTags: ['Order'],
     }),
+
+    // Order endpoints - Swagger-ə uyğun
+    // getOrders: builder.query({
+    //   query: () => '/orders/all', // Bu endpoint hələ yoxdur
+    //   providesTags: ['Order'],
+    //   retry: false,
+    //   transformErrorResponse: () => [],
+    // }),
+
+    getOrderById: builder.query({
+      query: (id) => `/orders/${id}`,
+      providesTags: (result, error, id) => [{ type: 'Order', id }],
+    }),
+
+    createOrder: builder.mutation({
+      query: (orderData) => ({
+        url: '/orders/add',
+        method: 'POST',
+        body: orderData,
+      }),
+      invalidatesTags: ['Order'],
+    }),
+
+    updateOrder: builder.mutation({
+      query: ({ id, ...orderData }) => ({
+        url: `/orders/update/${id}`,
+        method: 'PATCH',
+        body: orderData,
+      }),
+      invalidatesTags: (result, error, { id }) => [{ type: 'Order', id }, 'Order'],
+    }),
+
+    deleteOrder: builder.mutation({
+      query: (id) => ({
+        url: `/orders/delete/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Order'],
+    }),
+
+    // Order search and filter endpoints
+    searchOrdersByCustomer: builder.query({
+      query: (customerId) => ({
+        url: '/orders/search-by-customer',
+        params: { customerId },
+      }),
+      providesTags: ['Order'],
+    }),
+
+    searchOrdersByDate: builder.query({
+      query: (date) => ({
+        url: '/orders/search-by-date',
+        params: { date },
+      }),
+      providesTags: ['Order'],
+    }),
+
+    getOrderCount: builder.query({
+      query: () => '/orders/count',
+      providesTags: ['Order'],
+    }),
   }),
 });
 
@@ -199,12 +229,22 @@ export const {
   useGetCustomerCountQuery,
   useGetAllCustomersQuery,
   
-  // Courier hooks
-  useGetCouriersQuery,
-  useGetCourierByIdQuery,
-  useCreateCourierMutation,
-  useUpdateCourierMutation,
-  useDeleteCourierMutation,
+  // Courier hooks - hələ hazır deyil
+  // useGetCouriersQuery,
+  // useGetCourierByIdQuery,
+  // useCreateCourierMutation,
+  // useUpdateCourierMutation,
+  // useDeleteCourierMutation,
+  
+  // Order hooks
+  // useGetOrdersQuery, // Bu endpoint hələ yoxdur
+  useGetOrderByIdQuery,
+  useCreateOrderMutation,
+  useUpdateOrderMutation,
+  useDeleteOrderMutation,
+  useSearchOrdersByCustomerQuery,
+  useSearchOrdersByDateQuery,
+  // useGetOrderCountQuery, // Bu endpoint hələ yoxdur
   
   // File upload hooks
   useUploadFileMutation,
