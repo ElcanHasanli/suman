@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import { useOrders } from '../../contexts/OrdersContext';
 import {
     DollarSign,
     Calendar,
@@ -12,16 +11,25 @@ import {
     BarChart3,
     PieChart,
     Receipt,
-    Wallet
+    Wallet,
+    ChevronDown,
+    Eye,
+    Clock
 } from 'lucide-react';
 
 export default function Payments() {
-    const { orders, customers } = useOrders();
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedCustomer, setSelectedCustomer] = useState('all');
     const [paymentMethodFilter, setPaymentMethodFilter] = useState('all');
+    const [showFilters, setShowFilters] = useState(false);
 
-    // Test məlumatları - backend hazır olduqda real API-dən gələcək
+    // Test məlumatları
+    const customers = [
+        { id: 1, firstName: 'Əli', lastName: 'Məmmədov', phone: '+994501234567', pricePerBidon: 5 },
+        { id: 2, firstName: 'Leyla', lastName: 'Həsənova', phone: '+994551234567', pricePerBidon: 4.5 },
+        { id: 3, firstName: 'Rəşad', lastName: 'Əliyev', phone: '+994701234567', pricePerBidon: 5.5 }
+    ];
+
     const testOrders = [
         {
             id: 1,
@@ -52,36 +60,13 @@ export default function Payments() {
             completed: true,
             completedAt: '2024-01-15T16:45:00',
             amount: 40
-        },
-        {
-            id: 4,
-            customerId: 1,
-            date: '2024-01-14',
-            bidonOrdered: 12,
-            paymentMethod: 'cash',
-            completed: true,
-            completedAt: '2024-01-14T13:20:00',
-            amount: 60
-        },
-        {
-            id: 5,
-            customerId: 2,
-            date: '2024-01-14',
-            bidonOrdered: 20,
-            paymentMethod: 'card',
-            completed: true,
-            completedAt: '2024-01-14T15:10:00',
-            amount: 100
         }
     ];
 
-    // Əgər orders boşdursa, test məlumatlarından istifadə edirik
-    const displayOrders = orders.length > 0 ? orders : testOrders;
-
     // Seçilmiş tarixə görə sifarişləri filtrlə
     const dailyOrders = useMemo(() => {
-        return displayOrders.filter(order => order.date === selectedDate);
-    }, [displayOrders, selectedDate]);
+        return testOrders.filter(order => order.date === selectedDate);
+    }, [selectedDate]);
 
     // Müştəriyə görə filtrlə
     const filteredOrders = useMemo(() => {
@@ -150,10 +135,9 @@ export default function Payments() {
     const formatDate = (dateString) => {
         const date = new Date(dateString);
         return date.toLocaleDateString('az-AZ', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
         });
     };
 
@@ -169,109 +153,340 @@ export default function Payments() {
 
     // Məbləğ formatla
     const formatAmount = (amount) => {
-        return `${amount} AZN`;
+        return `${amount}₼`;
+    };
+
+    // Debug: Component rendering check
+    console.log('Payments component rendering', { selectedDate, filteredOrders, dailyRevenue, dailyDebt });
+
+    // Inline CSS styles for fallback
+    const styles = {
+        container: {
+            minHeight: '100vh',
+            background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+            fontFamily: 'Inter, system-ui, sans-serif'
+        },
+        header: {
+            background: 'linear-gradient(90deg, #16a34a 0%, #15803d 100%)',
+            color: 'white',
+            padding: '24px 16px',
+            position: 'relative',
+            overflow: 'hidden'
+        },
+        headerContent: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            marginBottom: '16px',
+            position: 'relative',
+            zIndex: 10
+        },
+        headerIcon: {
+            width: '48px',
+            height: '48px',
+            background: 'rgba(255, 255, 255, 0.2)',
+            borderRadius: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backdropFilter: 'blur(4px)'
+        },
+        headerTitle: {
+            fontSize: '24px',
+            fontWeight: 'bold',
+            margin: 0
+        },
+        headerSubtitle: {
+            color: '#bbf7d0',
+            fontSize: '14px',
+            margin: 0
+        },
+        filterButton: {
+            width: '100%',
+            background: 'rgba(255, 255, 255, 0.2)',
+            backdropFilter: 'blur(4px)',
+            borderRadius: '12px',
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            color: 'white',
+            fontWeight: '500',
+            border: 'none',
+            cursor: 'pointer'
+        },
+        filtersContainer: {
+            marginTop: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            position: 'relative',
+            zIndex: 10
+        },
+        input: {
+            width: '100%',
+            padding: '12px 16px',
+            background: 'white',
+            borderRadius: '12px',
+            border: 'none',
+            fontSize: '16px',
+            fontWeight: '500'
+        },
+        select: {
+            width: '100%',
+            padding: '12px 16px',
+            background: 'white',
+            borderRadius: '12px',
+            border: 'none',
+            fontSize: '16px',
+            fontWeight: '500'
+        },
+        content: {
+            padding: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '24px'
+        },
+        statsGrid: {
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '16px'
+        },
+        statCard: {
+            padding: '16px',
+            borderRadius: '16px',
+            textAlign: 'center',
+            color: 'white',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)'
+        },
+        statCardGreen: {
+            background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)'
+        },
+        statCardRed: {
+            background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+        },
+        statIcon: {
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: '8px'
+        },
+        statLabel: {
+            fontSize: '14px',
+            opacity: 0.9,
+            marginBottom: '4px'
+        },
+        statValue: {
+            fontSize: '24px',
+            fontWeight: 'bold'
+        },
+        section: {
+            background: 'white',
+            borderRadius: '16px',
+            padding: '16px',
+            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
+        },
+        sectionTitle: {
+            fontSize: '18px',
+            fontWeight: 'bold',
+            color: '#1f2937',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+        },
+        paymentMethodItem: {
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '12px',
+            borderRadius: '12px',
+            marginBottom: '12px'
+        },
+        paymentMethodIcon: {
+            width: '40px',
+            height: '40px',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white'
+        },
+        paymentMethodInfo: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
+        },
+        paymentMethodName: {
+            fontWeight: '600',
+            color: '#1f2937'
+        },
+        paymentMethodCount: {
+            fontSize: '14px',
+            color: '#6b7280'
+        },
+        paymentMethodAmount: {
+            fontSize: '20px',
+            fontWeight: 'bold'
+        },
+        orderItem: {
+            padding: '16px',
+            borderRadius: '12px',
+            marginBottom: '12px',
+            borderLeft: '4px solid'
+        },
+        orderItemCompleted: {
+            background: '#f0fdf4',
+            borderLeftColor: '#22c55e'
+        },
+        orderItemPending: {
+            background: '#fefce8',
+            borderLeftColor: '#eab308'
+        },
+        orderHeader: {
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            marginBottom: '8px'
+        },
+        orderCustomer: {
+            fontWeight: '600',
+            color: '#1f2937'
+        },
+        orderId: {
+            fontSize: '14px',
+            color: '#6b7280'
+        },
+        orderAmount: {
+            textAlign: 'right'
+        },
+        orderAmountValue: {
+            fontSize: '18px',
+            fontWeight: 'bold',
+            color: '#16a34a'
+        },
+        orderBidonCount: {
+            fontSize: '14px',
+            color: '#6b7280'
+        },
+        orderFooter: {
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+        },
+        orderTags: {
+            display: 'flex',
+            gap: '8px'
+        },
+        tag: {
+            padding: '4px 12px',
+            borderRadius: '9999px',
+            fontSize: '12px',
+            fontWeight: '500'
+        },
+        tagCash: {
+            background: '#dbeafe',
+            color: '#1e40af'
+        },
+        tagCard: {
+            background: '#dcfce7',
+            color: '#166534'
+        },
+        tagCredit: {
+            background: '#fef3c7',
+            color: '#92400e'
+        },
+        tagCompleted: {
+            background: '#dcfce7',
+            color: '#166534'
+        },
+        tagPending: {
+            background: '#fef3c7',
+            color: '#92400e'
+        },
+        orderTime: {
+            fontSize: '12px',
+            color: '#9ca3af'
+        },
+        exportButton: {
+            width: '100%',
+            background: 'linear-gradient(90deg, #16a34a 0%, #15803d 100%)',
+            color: 'white',
+            padding: '16px',
+            borderRadius: '16px',
+            fontWeight: '600',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)'
+        },
+        emptyState: {
+            textAlign: 'center',
+            padding: '32px 16px',
+            color: '#6b7280'
+        },
+        emptyIcon: {
+            margin: '0 auto 12px',
+            opacity: 0.5
+        },
+        emptyTitle: {
+            fontWeight: '500',
+            marginBottom: '4px'
+        },
+        emptySubtitle: {
+            fontSize: '14px'
+        }
     };
 
     return (
-        <div style={{
-            minHeight: '100vh',
-            background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
-            padding: '2rem'
-        }}>
-            <div style={{
-                maxWidth: '1400px',
-                margin: '0 auto',
-                background: 'white',
-                borderRadius: '24px',
-                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.1)',
-                overflow: 'hidden'
-            }}>
-
-                {/* Header */}
-                <div style={{
-                    background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
-                    color: 'white',
-                    padding: '2.5rem',
-                    position: 'relative',
-                    overflow: 'hidden'
-                }}>
-                    <div style={{
-                        position: 'absolute',
-                        top: '-50px',
-                        right: '-50px',
-                        width: '200px',
-                        height: '200px',
-                        background: 'rgba(255, 255, 255, 0.1)',
-                        borderRadius: '50%',
-                        opacity: 0.3
-                    }}></div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '2rem', position: 'relative', zIndex: 1 }}>
-                        <div style={{
-                            width: '64px',
-                            height: '64px',
-                            background: 'rgba(255, 255, 255, 0.2)',
-                            borderRadius: '20px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backdropFilter: 'blur(10px)',
-                            border: '1px solid rgba(255, 255, 255, 0.3)'
-                        }}>
-                            <DollarSign size={32} color="white" />
-                        </div>
-                        <div>
-                            <h1 style={{ fontSize: '3rem', fontWeight: '800', margin: 0, textShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
-                                Ödənişlər Paneli
-                            </h1>
-                            <p style={{ margin: 0, fontSize: '1.2rem', opacity: 0.9 }}>
-                                {formatDate(selectedDate)} - Günlük gəlir və ödəniş hesabatları
-                            </p>
-                        </div>
+        <div style={styles.container}>
+            {/* Header */}
+            <div style={styles.header}>
+                <div style={styles.headerContent}>
+                    <div style={styles.headerIcon}>
+                        <DollarSign size={24} />
                     </div>
+                    <div>
+                        <h1 style={styles.headerTitle}>Ödənişlər</h1>
+                        <p style={styles.headerSubtitle}>{formatDate(selectedDate)}</p>
+                    </div>
+                </div>
 
-                    {/* Filtrlər */}
-                    <div style={{
-                        display: 'flex',
-                        gap: '1rem',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        position: 'relative',
-                        zIndex: 1
-                    }}>
-                        <div style={{ position: 'relative' }}>
-                            <Calendar size={20} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.7)' }} />
-                            <input
-                                type="date"
-                                value={selectedDate}
-                                onChange={(e) => setSelectedDate(e.target.value)}
-                                style={{
-                                    padding: '0.75rem 1rem 0.75rem 2.5rem',
-                                    border: 'none',
-                                    borderRadius: '12px',
-                                    fontSize: '1rem',
-                                    background: 'rgba(255, 255, 255, 0.9)',
-                                    color: '#374151',
-                                    outline: 'none',
-                                    minWidth: '180px'
-                                }}
-                            />
-                        </div>
+                {/* Filter Toggle */}
+                <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    style={styles.filterButton}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Filter size={18} />
+                        Filtrlər
+                    </div>
+                    <ChevronDown 
+                        size={20} 
+                        style={{ 
+                            transform: showFilters ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.3s ease'
+                        }} 
+                    />
+                </button>
+
+                {/* Filters */}
+                {showFilters && (
+                    <div style={styles.filtersContainer}>
+                        <input
+                            type="date"
+                            value={selectedDate}
+                            onChange={(e) => setSelectedDate(e.target.value)}
+                            style={styles.input}
+                        />
 
                         <select
                             value={selectedCustomer}
                             onChange={(e) => setSelectedCustomer(e.target.value)}
-                            style={{
-                                padding: '0.75rem 1rem',
-                                border: 'none',
-                                borderRadius: '12px',
-                                fontSize: '1rem',
-                                background: 'rgba(255, 255, 255, 0.9)',
-                                color: '#374151',
-                                outline: 'none',
-                                cursor: 'pointer',
-                                minWidth: '200px'
-                            }}
+                            style={styles.select}
                         >
                             <option value="all">Bütün Müştərilər</option>
                             {customers.map(customer => (
@@ -284,380 +499,179 @@ export default function Payments() {
                         <select
                             value={paymentMethodFilter}
                             onChange={(e) => setPaymentMethodFilter(e.target.value)}
-                            style={{
-                                padding: '0.75rem 1rem',
-                                border: 'none',
-                                borderRadius: '12px',
-                                fontSize: '1rem',
-                                background: 'rgba(255, 255, 255, 0.9)',
-                                color: '#374151',
-                                outline: 'none',
-                                cursor: 'pointer',
-                                minWidth: '150px'
-                            }}
+                            style={styles.select}
                         >
                             <option value="all">Bütün Ödənişlər</option>
                             <option value="cash">Nağd</option>
                             <option value="card">Kart</option>
                             <option value="credit">Nəsiyə</option>
                         </select>
+                    </div>
+                )}
+            </div>
 
-                        <button
-                            style={{
-                                padding: '0.75rem 1.5rem',
-                                background: 'rgba(255, 255, 255, 0.9)',
-                                color: '#15803d',
-                                border: 'none',
-                                borderRadius: '12px',
-                                fontSize: '1rem',
-                                fontWeight: '600',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.5rem',
-                                transition: 'all 0.2s ease'
-                            }}
-                            onMouseOver={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 1)'}
-                            onMouseOut={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.9)'}
-                        >
-                            <Download size={18} />
-                            Hesabat Yüklə
-                        </button>
+            <div style={styles.content}>
+                {/* Günlük Statistika */}
+                <div style={styles.statsGrid}>
+                    <div style={{ ...styles.statCard, ...styles.statCardGreen }}>
+                        <div style={styles.statIcon}>
+                            <TrendingUp size={20} />
+                        </div>
+                        <div style={styles.statLabel}>Günlük Gəlir</div>
+                        <div style={styles.statValue}>{formatAmount(dailyRevenue)}</div>
+                    </div>
+
+                    <div style={{ ...styles.statCard, ...styles.statCardRed }}>
+                        <div style={styles.statIcon}>
+                            <Clock size={20} />
+                        </div>
+                        <div style={styles.statLabel}>Gözləyən</div>
+                        <div style={styles.statValue}>{formatAmount(dailyDebt)}</div>
                     </div>
                 </div>
 
-                <div style={{ padding: '2.5rem' }}>
-
-                    {/* Günlük Maliyyə Statistikaları */}
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-                        gap: '1.5rem',
-                        marginBottom: '3rem'
-                    }}>
-                        <div style={{
-                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                            color: 'white',
-                            padding: '2rem',
-                            borderRadius: '20px',
-                            textAlign: 'center',
-                            boxShadow: '0 8px 25px rgba(16, 185, 129, 0.3)'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                                <TrendingUp size={24} />
-                                <span style={{ fontSize: '0.9rem', opacity: 0.9 }}>GÜNLÜK GƏLİR</span>
-                            </div>
-                            <div style={{ fontSize: '2.5rem', fontWeight: '800', marginBottom: '0.5rem' }}>
-                                {formatAmount(dailyRevenue)}
-                            </div>
-                            <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>tamamlanmış sifarişlər</div>
-                        </div>
-
-                        <div style={{
-                            background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                            color: 'white',
-                            padding: '2rem',
-                            borderRadius: '20px',
-                            textAlign: 'center',
-                            boxShadow: '0 8px 25px rgba(239, 68, 68, 0.3)'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                                <CreditCard size={24} />
-                                <span style={{ fontSize: '0.9rem', opacity: 0.9 }}>GÜNLÜK BORC</span>
-                            </div>
-                            <div style={{ fontSize: '2.5rem', fontWeight: '800', marginBottom: '0.5rem' }}>
-                                {formatAmount(dailyDebt)}
-                            </div>
-                            <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>gözləyən sifarişlər</div>
-                        </div>
-
-
-
-                        
-                    </div>
-
-                  
-
-                    {/* Ödəniş Metodlarına Görə Bölgü */}
-                    <div style={{ marginBottom: '3rem' }}>
-                        <h2 style={{
-                            fontSize: '1.8rem',
-                            fontWeight: '700',
-                            color: '#1f2937',
-                            marginBottom: '1.5rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem'
-                        }}>
-                            <PieChart size={24} style={{ color: '#16a34a' }} />
-                            Ödəniş Metodlarına Görə Bölgü
-                        </h2>
-
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                            gap: '1.5rem'
-                        }}>
-                            <div style={{
-                                background: 'white',
-                                borderRadius: '16px',
-                                padding: '2rem',
-                                border: '1px solid #e5e7eb',
-                                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.05)',
-                                textAlign: 'center'
-                            }}>
-                                <div style={{
-                                    width: '80px',
-                                    height: '80px',
-                                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                                    borderRadius: '50%',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    margin: '0 auto 1rem auto',
-                                    color: 'white',
-                                    fontSize: '2rem',
-                                    fontWeight: '700'
-                                }}>
-                                    <Banknote size={32} />
-                                </div>
-                                <h3 style={{ fontSize: '1.5rem', fontWeight: '600', margin: '0 0 0.5rem 0', color: '#1f2937' }}>
-                                    Nağd Ödənişlər
-                                </h3>
-                                <div style={{ fontSize: '2rem', fontWeight: '800', color: '#3b82f6', marginBottom: '0.5rem' }}>
-                                    {formatAmount(paymentMethodStats.cash)}
-                                </div>
-                                <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>
-                                    {completedOrders.filter(o => o.paymentMethod === 'cash').length} sifariş
-                                </div>
-                            </div>
-
-                            <div style={{
-                                background: 'white',
-                                borderRadius: '16px',
-                                padding: '2rem',
-                                border: '1px solid #e5e7eb',
-                                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.05)',
-                                textAlign: 'center'
-                            }}>
-                                <div style={{
-                                    width: '80px',
-                                    height: '80px',
-                                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                                    borderRadius: '50%',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    margin: '0 auto 1rem auto',
-                                    color: 'white',
-                                    fontSize: '2rem',
-                                    fontWeight: '700'
-                                }}>
-                                    <CreditCard size={32} />
-                                </div>
-                                <h3 style={{ fontSize: '1.5rem', fontWeight: '600', margin: '0 0 0.5rem 0', color: '#1f2937' }}>
-                                    Kartla Ödənişlər
-                                </h3>
-                                <div style={{ fontSize: '2rem', fontWeight: '800', color: '#10b981', marginBottom: '0.5rem' }}>
-                                    {formatAmount(paymentMethodStats.card)}
-                                </div>
-                                <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>
-                                    {completedOrders.filter(o => o.paymentMethod === 'card').length} sifariş
-                                </div>
-                            </div>
-
-                            <div style={{
-                                background: 'white',
-                                borderRadius: '16px',
-                                padding: '2rem',
-                                border: '1px solid #e5e7eb',
-                                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.05)',
-                                textAlign: 'center'
-                            }}>
-                                <div style={{
-                                    width: '80px',
-                                    height: '80px',
-                                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                                    borderRadius: '50%',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    margin: '0 auto 1rem auto',
-                                    color: 'white',
-                                    fontSize: '2rem',
-                                    fontWeight: '700'
-                                }}>
-                                    <CreditCard size={32} />
-                                </div>
-                                <h3 style={{ fontSize: '1.5rem', fontWeight: '600', margin: '0 0 0.5rem 0', color: '#1f2937' }}>
-                                    Nəsiyə Ödənişlər
-                                </h3>
-                                <div style={{ fontSize: '2rem', fontWeight: '800', color: '#f59e0b', marginBottom: '0.5rem' }}>
-                                    {formatAmount(paymentMethodStats.credit)}
-                                </div>
-                                <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>
-                                    {completedOrders.filter(o => o.paymentMethod === 'credit').length} sifariş
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Günlük Ödənişlər Siyahısı */}
+                {/* Ödəniş Metodları */}
+                <div style={styles.section}>
+                    <h3 style={styles.sectionTitle}>
+                        <PieChart size={20} style={{ color: '#16a34a' }} />
+                        Ödəniş Metodları
+                    </h3>
+                    
                     <div>
-                        <h2 style={{
-                            fontSize: '1.8rem',
-                            fontWeight: '700',
-                            color: '#1f2937',
-                            marginBottom: '1.5rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem'
-                        }}>
-                            <Receipt size={24} style={{ color: '#16a34a' }} />
-                            Günlük Ödənişlər
-                        </h2>
-
-                        {filteredOrders.length === 0 ? (
-                            <div style={{
-                                textAlign: 'center',
-                                padding: '3rem',
-                                color: '#6b7280',
-                                background: 'white',
-                                borderRadius: '16px',
-                                border: '2px dashed #cbd5e1'
-                            }}>
-                                <Wallet size={64} style={{ marginBottom: '1rem', color: '#94a3b8' }} />
-                                <h3 style={{ fontSize: '1.5rem', fontWeight: '600', margin: '0 0 0.5rem 0', color: '#475569' }}>
-                                    Ödəniş Yoxdur
-                                </h3>
-                                <p style={{ margin: 0, fontSize: '1.1rem' }}>
-                                    {formatDate(selectedDate)} tarixində seçilmiş filtrlərə uyğun ödəniş yoxdur
-                                </p>
-                            </div>
-                        ) : (
-                            <div style={{
-                                background: 'white',
-                                borderRadius: '16px',
-                                border: '1px solid #e5e7eb',
-                                overflow: 'hidden',
-                                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.05)'
-                            }}>
-                                <div style={{
-                                    background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-                                    padding: '1.5rem',
-                                    borderBottom: '1px solid #e5e7eb'
-                                }}>
-                                    <div style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-                                        gap: '1rem',
-                                        fontSize: '0.9rem',
-                                        fontWeight: '600',
-                                        color: '#64748b'
-                                    }}>
-                                        <div>Sifariş ID</div>
-                                        <div>Müştəri</div>
-                                        <div>Bidon</div>
-                                        <div>Məbləğ</div>
-                                        <div>Ödəniş</div>
-                                        <div>Status</div>
-                                        <div>Tarix</div>
+                        <div style={{ ...styles.paymentMethodItem, background: '#eff6ff' }}>
+                            <div style={styles.paymentMethodInfo}>
+                                <div style={{ ...styles.paymentMethodIcon, background: '#3b82f6' }}>
+                                    <Banknote size={18} />
+                                </div>
+                                <div>
+                                    <div style={styles.paymentMethodName}>Nağd</div>
+                                    <div style={styles.paymentMethodCount}>
+                                        {completedOrders.filter(o => o.paymentMethod === 'cash').length} sifariş
                                     </div>
                                 </div>
-
-                                {filteredOrders.map(order => {
-                                    const customer = getCustomer(order.customerId);
-                                    const orderAmount = order.bidonOrdered * (customer.pricePerBidon || 5);
-
-                                    return (
-                                        <div key={order.id} style={{
-                                            display: 'grid',
-                                            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-                                            gap: '1rem',
-                                            padding: '1.5rem',
-                                            borderBottom: '1px solid #f3f4f6',
-                                            alignItems: 'center',
-                                            fontSize: '0.9rem',
-                                            background: order.completed ? '#f0fdf4' : '#fffbeb'
-                                        }}>
-                                            <div style={{ fontWeight: '600', color: '#374151' }}>
-                                                #{order.id}
-                                            </div>
-
-                                            <div>
-                                                <div style={{ fontWeight: '600', color: '#374151' }}>
-                                                    {customer.firstName} {customer.lastName}
-                                                </div>
-                                                <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-                                                    {customer.phone}
-                                                </div>
-                                            </div>
-
-                                            <div style={{ textAlign: 'center' }}>
-                                                <div style={{ fontWeight: '600', color: '#374151' }}>
-                                                    {order.bidonOrdered}
-                                                </div>
-                                                <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-                                                    bidon
-                                                </div>
-                                            </div>
-
-                                            <div style={{ fontWeight: '700', color: '#16a34a', fontSize: '1.1rem' }}>
-                                                {formatAmount(orderAmount)}
-                                            </div>
-
-                                            <div>
-                                                <div style={{
-                                                    padding: '0.25rem 0.75rem',
-                                                    borderRadius: '20px',
-                                                    fontSize: '0.8rem',
-                                                    fontWeight: '600',
-                                                    background: order.paymentMethod === 'cash' ? '#dbeafe' :
-                                                        order.paymentMethod === 'card' ? '#d1fae5' : '#fef3c7',
-                                                    color: order.paymentMethod === 'cash' ? '#1e40af' :
-                                                        order.paymentMethod === 'card' ? '#065f46' : '#92400e',
-                                                    border: `1px solid ${order.paymentMethod === 'cash' ? '#93c5fd' :
-                                                        order.paymentMethod === 'card' ? '#a7f3d0' : '#fde68a'}`,
-                                                    textAlign: 'center',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '0.25rem'
-                                                }}>
-                                                    {order.paymentMethod === 'cash' ? <Banknote size={12} /> :
-                                                        order.paymentMethod === 'card' ? <CreditCard size={12} /> :
-                                                            <CreditCard size={12} />}
-                                                    {order.paymentMethod === 'cash' ? 'Nağd' :
-                                                        order.paymentMethod === 'card' ? 'Kart' :
-                                                            'Nəsiyə'}
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <div style={{
-                                                    padding: '0.25rem 0.75rem',
-                                                    borderRadius: '20px',
-                                                    fontSize: '0.8rem',
-                                                    fontWeight: '600',
-                                                    background: order.completed ? '#d1fae5' : '#fef3c7',
-                                                    color: order.completed ? '#065f46' : '#92400e',
-                                                    border: `1px solid ${order.completed ? '#a7f3d0' : '#fde68a'}`,
-                                                    textAlign: 'center'
-                                                }}>
-                                                    {order.completed ? 'Ödənilib' : 'Gözləyir'}
-                                                </div>
-                                            </div>
-
-                                            <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-                                                {order.completed ? formatTime(order.completedAt) : 'N/A'}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
                             </div>
-                        )}
+                            <div style={{ ...styles.paymentMethodAmount, color: '#2563eb' }}>
+                                {formatAmount(paymentMethodStats.cash)}
+                            </div>
+                        </div>
+
+                        <div style={{ ...styles.paymentMethodItem, background: '#f0fdf4' }}>
+                            <div style={styles.paymentMethodInfo}>
+                                <div style={{ ...styles.paymentMethodIcon, background: '#22c55e' }}>
+                                    <CreditCard size={18} />
+                                </div>
+                                <div>
+                                    <div style={styles.paymentMethodName}>Kart</div>
+                                    <div style={styles.paymentMethodCount}>
+                                        {completedOrders.filter(o => o.paymentMethod === 'card').length} sifariş
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={{ ...styles.paymentMethodAmount, color: '#16a34a' }}>
+                                {formatAmount(paymentMethodStats.card)}
+                            </div>
+                        </div>
+
+                        <div style={{ ...styles.paymentMethodItem, background: '#fefce8' }}>
+                            <div style={styles.paymentMethodInfo}>
+                                <div style={{ ...styles.paymentMethodIcon, background: '#eab308' }}>
+                                    <CreditCard size={18} />
+                                </div>
+                                <div>
+                                    <div style={styles.paymentMethodName}>Nəsiyə</div>
+                                    <div style={styles.paymentMethodCount}>
+                                        {completedOrders.filter(o => o.paymentMethod === 'credit').length} sifariş
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={{ ...styles.paymentMethodAmount, color: '#ca8a04' }}>
+                                {formatAmount(paymentMethodStats.credit)}
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                {/* Ödənişlər Siyahısı */}
+                <div style={styles.section}>
+                    <h3 style={styles.sectionTitle}>
+                        <Receipt size={20} style={{ color: '#16a34a' }} />
+                        Günlük Ödənişlər ({filteredOrders.length})
+                    </h3>
+
+                    {filteredOrders.length === 0 ? (
+                        <div style={styles.emptyState}>
+                            <Wallet size={48} style={styles.emptyIcon} />
+                            <p style={styles.emptyTitle}>Ödəniş tapılmadı</p>
+                            <p style={styles.emptySubtitle}>Bu tarix və filtr üçün məlumat yoxdur</p>
+                        </div>
+                    ) : (
+                        <div>
+                            {filteredOrders.map(order => {
+                                const customer = getCustomer(order.customerId);
+                                const orderAmount = order.bidonOrdered * (customer.pricePerBidon || 5);
+
+                                return (
+                                    <div 
+                                        key={order.id} 
+                                        style={{
+                                            ...styles.orderItem,
+                                            ...(order.completed ? styles.orderItemCompleted : styles.orderItemPending)
+                                        }}
+                                    >
+                                        <div style={styles.orderHeader}>
+                                            <div>
+                                                <div style={styles.orderCustomer}>
+                                                    {customer.firstName} {customer.lastName}
+                                                </div>
+                                                <div style={styles.orderId}>
+                                                    Sifariş #{order.id}
+                                                </div>
+                                            </div>
+                                            <div style={styles.orderAmount}>
+                                                <div style={styles.orderAmountValue}>
+                                                    {formatAmount(orderAmount)}
+                                                </div>
+                                                <div style={styles.orderBidonCount}>
+                                                    {order.bidonOrdered} bidon
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div style={styles.orderFooter}>
+                                            <div style={styles.orderTags}>
+                                                <span style={{
+                                                    ...styles.tag,
+                                                    ...(order.paymentMethod === 'cash' ? styles.tagCash : 
+                                                         order.paymentMethod === 'card' ? styles.tagCard : styles.tagCredit)
+                                                }}>
+                                                    {order.paymentMethod === 'cash' ? 'Nağd' : 
+                                                     order.paymentMethod === 'card' ? 'Kart' : 'Nəsiyə'}
+                                                </span>
+                                                
+                                                <span style={{
+                                                    ...styles.tag,
+                                                    ...(order.completed ? styles.tagCompleted : styles.tagPending)
+                                                }}>
+                                                    {order.completed ? 'Ödənilib' : 'Gözləyir'}
+                                                </span>
+                                            </div>
+                                            
+                                            <div style={styles.orderTime}>
+                                                {order.completed ? formatTime(order.completedAt) : 'Gözləyir'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* Export Button */}
+                <button style={styles.exportButton}>
+                    <Download size={20} />
+                    Hesabat Yüklə
+                </button>
             </div>
         </div>
     );
