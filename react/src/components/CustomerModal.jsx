@@ -205,6 +205,38 @@ const CustomerModal = ({
             </div>
           </div>
 
+          <div style={styles.formGrid}>
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>
+                Aktiv Bidon Sayı
+              </label>
+              <AnimatedInput
+                type="number"
+                name="activeBidonCount"
+                placeholder="Müştərinin üzərində qalan bidon sayı"
+                value={formData.activeBidonCount || ''}
+                onChange={onChange}
+                min="0"
+                step="1"
+              />
+            </div>
+
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>
+                Borc (AZN)
+              </label>
+              <AnimatedInput
+                type="number"
+                name="debtAmount"
+                placeholder="Müştərinin borcu"
+                value={formData.debtAmount || ''}
+                onChange={onChange}
+                min="0"
+                step="0.01"
+              />
+            </div>
+          </div>
+
           <button
             type="submit"
             style={styles.submitButton}

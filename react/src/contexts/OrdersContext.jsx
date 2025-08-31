@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { useGetCustomersQuery } from '../services/apiSlice';
 // import { useGetOrdersQuery } from '../services/apiSlice'; // Bu endpoint hələ yoxdur
 
@@ -6,7 +6,15 @@ export const OrdersContext = createContext();
 
 export const OrdersProvider = ({ children }) => {
   const [customers, setCustomers] = useState([]);
-  const [orders, setOrders] = useState([]);
+  // Orders are stored per date as YYYY-MM-DD => Order[]
+  const [ordersByDate, setOrdersByDate] = useState(() => {
+    try {
+      const raw = localStorage.getItem('ordersByDate');
+      return raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      return {};
+    }
+  });
   const [couriers, setCouriers] = useState([]);
 
   // Fetch data from API
@@ -27,11 +35,50 @@ export const OrdersProvider = ({ children }) => {
   //   }
   // }, [couriersData]); // Hələ hazır deyil
 
-  // useEffect(() => {
-  //   if (ordersData) {
-  //     setOrders(ordersData);
-  //   }
-  // }, [ordersData]); // Bu endpoint hələ yoxdur
+  // Persist ordersByDate to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('ordersByDate', JSON.stringify(ordersByDate));
+    } catch (_) {
+      // ignore persistence errors
+    }
+  }, [ordersByDate]);
+
+  // Helpers for date-based order access
+  const getOrdersForDate = (dateStr) => {
+    if (!dateStr) return [];
+    return ordersByDate[dateStr] || [];
+  };
+
+  const setOrdersForDate = (dateStr, ordersForDate) => {
+    setOrdersByDate(prev => ({ ...prev, [dateStr]: ordersForDate }));
+  };
+
+  const addOrderForDate = (dateStr, order) => {
+    setOrdersByDate(prev => {
+      const existing = prev[dateStr] || [];
+      const nextId = existing.length > 0 ? Math.max(...existing.map(o => Number(o.id) || 0)) + 1 : 1;
+      const orderWithId = { ...order, id: order.id ?? nextId, date: dateStr };
+      return { ...prev, [dateStr]: [...existing, orderWithId] };
+    });
+  };
+
+  const removeOrderForDate = (dateStr, orderId) => {
+    setOrdersByDate(prev => {
+      const existing = prev[dateStr] || [];
+      return { ...prev, [dateStr]: existing.filter(o => o.id !== orderId) };
+    });
+  };
+
+  const updateOrderForDate = (dateStr, orderId, updates) => {
+    setOrdersByDate(prev => {
+      const existing = prev[dateStr] || [];
+      return {
+        ...prev,
+        [dateStr]: existing.map(o => (o.id === orderId ? { ...o, ...updates } : o))
+      };
+    });
+  };
 
   // Error handling for orders API
   // useEffect(() => {
@@ -46,11 +93,16 @@ export const OrdersProvider = ({ children }) => {
 
   return (
     <OrdersContext.Provider value={{ 
-      customers, 
-      setCustomers, 
-      orders, 
-      setOrders, 
-      couriers, 
+      customers,
+      setCustomers,
+      ordersByDate,
+      setOrdersByDate,
+      getOrdersForDate,
+      setOrdersForDate,
+      addOrderForDate,
+      removeOrderForDate,
+      updateOrderForDate,
+      couriers,
       setCouriers,
       isLoading 
     }}>

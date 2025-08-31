@@ -31,6 +31,8 @@ function CustomerData() {
     address: '',
     phone: '',
     pricePerBidon: '',
+    activeBidonCount: '',
+    debtAmount: ''
   });
 
   // API hooks - indi aktiv
@@ -71,6 +73,8 @@ function CustomerData() {
       address: customer.address || '',
       phone: customer.phoneNumber || customer.phone || '',
       pricePerBidon: customer.price || customer.pricePerBidon || '',
+      activeBidonCount: customer.activeBidonCount || customer.activeBidon || customer.bidonRemaining || 0,
+      debtAmount: customer.debtAmount || customer.debt || 0
     });
   };
 
@@ -111,6 +115,8 @@ function CustomerData() {
       address: '',
       phone: '',
       pricePerBidon: '',
+      activeBidonCount: '',
+      debtAmount: ''
     });
   };
 
@@ -123,6 +129,8 @@ function CustomerData() {
       address: '',
       phone: '',
       pricePerBidon: '',
+      activeBidonCount: '',
+      debtAmount: ''
     });
   };
 
@@ -149,13 +157,15 @@ function CustomerData() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    let { firstName, lastName, address, phone, pricePerBidon } = formData;
+    let { firstName, lastName, address, phone, pricePerBidon, activeBidonCount, debtAmount } = formData;
 
     firstName = firstName.trim();
     lastName = lastName.trim();
     address = address.trim();
     phone = phone.trim();
     pricePerBidon = pricePerBidon.toString().trim();
+    activeBidonCount = (activeBidonCount ?? '').toString().trim();
+    debtAmount = (debtAmount ?? '').toString().trim();
 
     if (!firstName || !lastName || !address || !phone || !pricePerBidon) {
       toast.warning('Zəhmət olmasa bütün sahələri doldurun!');
@@ -163,8 +173,18 @@ function CustomerData() {
     }
 
     const price = Number(pricePerBidon);
+    const activeBidons = activeBidonCount === '' ? 0 : Number(activeBidonCount);
+    const debt = debtAmount === '' ? 0 : Number(debtAmount);
     if (isNaN(price) || price <= 0) {
       toast.warning('Qiymət düzgün daxil edilməyib!');
+      return;
+    }
+    if (isNaN(activeBidons) || activeBidons < 0) {
+      toast.warning('Aktiv bidon sayı düzgün deyil!');
+      return;
+    }
+    if (isNaN(debt) || debt < 0) {
+      toast.warning('Borc məbləği düzgün deyil!');
       return;
     }
 
@@ -187,7 +207,9 @@ function CustomerData() {
         surname: lastName,
         address,
         phoneNumber: phone,
-        price: price
+        price: price,
+        activeBidonCount: activeBidons,
+        debtAmount: debt
       };
 
       if (editMode) {
@@ -210,6 +232,8 @@ function CustomerData() {
         address: '',
         phone: '',
         pricePerBidon: '',
+        activeBidonCount: '',
+        debtAmount: ''
       });
       setModalOpen(false);
       setEditMode(null);
@@ -1252,6 +1276,16 @@ function CustomerData() {
                       </th>
                       <th style={styles.th}>
                         <div style={styles.thContent}>
+                          Aktiv Bidon
+                        </div>
+                      </th>
+                      <th style={styles.th}>
+                        <div style={styles.thContent}>
+                          Borc (AZN)
+                        </div>
+                      </th>
+                      <th style={styles.th}>
+                        <div style={styles.thContent}>
                           Əməliyyat
                         </div>
                       </th>
@@ -1286,6 +1320,16 @@ function CustomerData() {
                         <td style={styles.td}>
                           <span style={styles.priceBadge}>
                             {customer.price || customer.pricePerBidon} {customer.currency || 'AZN'}
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          <span>
+                            {customer.activeBidonCount || customer.activeBidon || customer.bidonRemaining || 0}
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          <span style={{ color: (customer.debtAmount || customer.debt || 0) > 0 ? '#dc2626' : '#16a34a', fontWeight: '600' }}>
+                            {(customer.debtAmount || customer.debt || 0)}
                           </span>
                         </td>
                         <td style={styles.td}>

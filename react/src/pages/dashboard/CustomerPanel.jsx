@@ -1,39 +1,93 @@
-import { useState, useContext } from 'react';
-import { Plus, Package, Users, User, Phone, MapPin, DollarSign, Calendar, Droplets, Search, X, Edit, Trash2, Menu } from 'lucide-react';
+import { useState, useContext, useEffect } from 'react';
+import { Plus, Package, Users, User, Phone, MapPin, DollarSign, Calendar, Droplets, Search, X, Edit, Trash2, Menu, CheckCircle, Clock, Loader2 } from 'lucide-react';
+import { useOrders } from '../../contexts/OrdersContext';
+import { useCreateOrderMutation, useUpdateOrderMutation, useDeleteOrderMutation, useGetOrderByIdQuery } from '../../services/apiSlice';
 
 function CustomerPanel() {
-  // Mock data for demonstration
-  const customers = [
+  const { getOrdersForDate, addOrderForDate, customers: ctxCustomers, ordersByDate } = useOrders();
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  
+  // API hooks for order management
+  const [createOrder, { isLoading: isCreatingOrder }] = useCreateOrderMutation();
+  const [updateOrder, { isLoading: isUpdatingOrder }] = useUpdateOrderMutation();
+  const [deleteOrder, { isLoading: isDeletingOrder }] = useDeleteOrderMutation();
+  
+  // State for orders from backend
+  const [backendOrders, setBackendOrders] = useState([]);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+  
+  // State for customers from backend
+  const [backendCustomers, setBackendCustomers] = useState([]);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  
+  // Combine context customers with backend customers
+  // Backend müştərilərinin field adlarını düzəlt
+  const normalizedBackendCustomers = backendCustomers.map(customer => {
+    // Backend customer structure-ını yoxla və düzəlt
+    if (customer.firstName && customer.lastName) {
+      // Artıq düzgün format
+      return customer;
+    } else if (customer.name) {
+      // Backend-də name field var, surname də var
+      const normalized = {
+        id: `backend_${customer.id}`, // Unique ID üçün prefix əlavə et
+        originalId: customer.id, // Orijinal ID-ni saxla
+        firstName: customer.name || '',
+        lastName: customer.surname || '', // surname field-ını istifadə et
+        phone: customer.phone || customer.phoneNumber || '',
+        address: customer.address || '',
+        pricePerBidon: customer.pricePerBidon || 5
+      };
+      return normalized;
+    } else if (customer.fullName) {
+      // Backend-də fullName field var
+      const nameParts = customer.fullName.split(' ');
+      const normalized = {
+        id: `backend_${customer.id}`, // Unique ID üçün prefix əlavə et
+        originalId: customer.id, // Orijinal ID-ni saxla
+        firstName: nameParts[0] || '',
+        lastName: nameParts.slice(1).join(' ') || '',
+        phone: customer.phone || customer.phoneNumber || '',
+        address: customer.address || '',
+        pricePerBidon: customer.pricePerBidon || 5
+      };
+      return normalized;
+    } else {
+      // Naməlum format, default values
+      const normalized = {
+        id: `backend_${customer.id}`, // Unique ID üçün prefix əlavə et
+        originalId: customer.id, // Orijinal ID-ni saxla
+        firstName: customer.firstName || customer.name || customer.fullName || 'Naməlum',
+        lastName: customer.lastName || customer.surname || '',
+        phone: customer.phone || customer.phoneNumber || '',
+        address: customer.address || '',
+        pricePerBidon: customer.pricePerBidon || 5
+      };
+      return normalized;
+    }
+  });
+  
+  const customers = [...(ctxCustomers || []), ...normalizedBackendCustomers];
+  
+  // Fallback demo customers if no customers exist
+  const allCustomers = customers.length > 0 ? customers : [
     { id: 1, firstName: 'Əli', lastName: 'Məmmədov', phone: '+994501234567', address: 'Yasamal rayonu', pricePerBidon: 5 },
     { id: 2, firstName: 'Ayşə', lastName: 'Həsənova', phone: '+994551234567', address: 'Nizami rayonu', pricePerBidon: 6 }
   ];
+  
+  // Use allCustomers for customer operations
+  const customersForOperations = allCustomers;
+  
 
-  const testOrders = [
-    {
-      id: 1,
-      customerId: 1,
-      courierId: 1,
-      date: '2024-01-15',
-      bidonOrdered: 10,
-      bidonReturned: 8,
-      bidonTakenByCourier: 2,
-      bidonRemaining: 0,
-      paymentMethod: 'cash',
-      completed: true
-    },
-    {
-      id: 2,
-      customerId: 2,
-      courierId: 2,
-      date: '2024-01-16',
-      bidonOrdered: 15,
-      bidonReturned: 0,
-      bidonTakenByCourier: 0,
-      bidonRemaining: 15,
-      paymentMethod: null,
-      completed: false
-    }
-  ];
+
+  // Combine backend orders with local context orders
+  const allOrders = [...backendOrders, ...Object.values(ordersByDate).flat()];
+  const ordersForDate = allOrders.filter(order => {
+    // Backend orders use orderDate, local orders use date
+    const orderDate = order.orderDate || order.date;
+    return orderDate === selectedDate;
+  });
 
   const testCouriers = [
     { id: 1, name: 'Əli Məmmədov', phone: '+994501234567', vehicle: 'Motosiklet' },
@@ -47,7 +101,6 @@ function CustomerPanel() {
     date: '',
     bidonOrdered: '',
     courierId: '',
-    paymentMethod: '',
   });
 
   const [customerSearch, setCustomerSearch] = useState('');
@@ -59,10 +112,125 @@ function CustomerPanel() {
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
 
-  const getCustomer = (id) => customers.find(c => c.id === Number(id));
+  const getCustomer = (id) => {
+    // Əvvəlcə customersForOperations-də ara
+    let customer = customersForOperations.find(c => c.id === Number(id));
+    
+    // Əgər tapılmadısa, backend müştərilərində ara (originalId ilə)
+    if (!customer) {
+      customer = customersForOperations.find(c => c.originalId === Number(id));
+    }
+    
+    // Əgər hələ də tapılmadısa, backend müştərilərində ara (id ilə)
+    if (!customer) {
+      customer = customersForOperations.find(c => c.id === `backend_${id}`);
+    }
+    
+    // Əgər hələ də tapılmadısa, string id ilə ara
+    if (!customer) {
+      customer = customersForOperations.find(c => c.id === id);
+    }
+    
+    // Backend müştəriləri üçün field adlarını düzəlt
+    if (customer && (customer.name || customer.surname)) {
+      customer = {
+        ...customer,
+        firstName: customer.firstName || customer.name || '',
+        lastName: customer.lastName || customer.surname || ''
+      };
+    }
+    
+    return customer;
+  };
+  
   const getCourier = (id) => testCouriers.find(c => c.id === Number(id));
+  
+  // Fetch orders from backend
+  const fetchOrdersFromBackend = async () => {
+    try {
+      setIsLoadingOrders(true);
+      const response = await fetch('http://62.171.154.6:9090/orders/all');
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Debug: Log the first order to see its structure
+        if (data.length > 0) {
+          console.log('First backend order structure:', data[0]);
+          console.log('Available fields:', Object.keys(data[0]));
+          
+          // Check if orders have unique identifiers
+          const uniqueIdentifiers = data.map((order, index) => ({
+            index,
+            customerFullName: order.customerFullName,
+            customerPhoneNumber: order.customerPhoneNumber,
+            orderDate: order.orderDate,
+            price: order.price,
+            carboyCount: order.carboyCount,
+            courierFullName: order.courierFullName,
+            orderStatus: order.orderStatus
+          }));
+          
+          console.log('Orders with potential unique identifiers:', uniqueIdentifiers);
+        }
+        
+        // Backend sifarişlərinə müştəri məlumatlarını əlavə et
+        const enrichedOrders = data.map((order, index) => {
+          const customer = getCustomer(order.customerId);
+          const courier = getCourier(order.courierId);
+          
+          return {
+            ...order,
+            // TEMPORARY SOLUTION: Backend API doesn't provide order IDs
+            // This is a critical issue that needs to be fixed by the backend developer
+            // The /orders/all endpoint should return orders with an 'id' field
+            tempId: index + 1,
+            customerFullName: customer ? `${customer.firstName} ${customer.lastName}` : 'Naməlum Müştəri',
+            customerPhoneNumber: customer?.phone || '',
+            customerAddress: customer?.address || '',
+            courierFullName: courier?.name || 'Təyin olunmayıb'
+          };
+        });
+        
+        setBackendOrders(enrichedOrders);
+      } else {
+        console.error('Failed to fetch orders:', response.status);
+        setBackendOrders([]);
+      }
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      setBackendOrders([]);
+    } finally {
+      setIsLoadingOrders(false);
+    }
+  };
+  
+  // Fetch customers from backend
+  const fetchCustomersFromBackend = async () => {
+    try {
+      setIsLoadingCustomers(true);
+      const response = await fetch('http://62.171.154.6:9090/customers/all');
+      if (response.ok) {
+        const data = await response.json();
+        setBackendCustomers(data);
+      } else {
+        console.error('Failed to fetch customers:', response.status);
+        setBackendCustomers([]);
+      }
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+      setBackendCustomers([]);
+    } finally {
+      setIsLoadingCustomers(false);
+    }
+  };
+  
+  // Load data on component mount
+  useEffect(() => {
+    fetchOrdersFromBackend();
+    fetchCustomersFromBackend();
+  }, []);
 
-  const filteredCustomers = customers.filter(customer => {
+  const filteredCustomers = customersForOperations.filter(customer => {
     const fullName = `${customer.firstName} ${customer.lastName}`.toLowerCase();
     const phone = customer.phone ? customer.phone.toLowerCase() : '';
     const address = customer.address ? customer.address.toLowerCase() : '';
@@ -80,36 +248,90 @@ function CustomerPanel() {
     return name.includes(searchTerm) || phone.includes(searchTerm) || vehicle.includes(searchTerm);
   });
 
-  const filteredOrders = testOrders.filter(order => {
-    const customer = getCustomer(order.customerId);
-    const courier = getCourier(order.courierId);
-    const customerName = customer ? `${customer.firstName} ${customer.lastName}`.toLowerCase() : '';
-    const courierName = courier ? courier.name.toLowerCase() : '';
+  const filteredOrders = ordersForDate.filter(order => {
+    let customer, courier, customerName, courierName, bidonCount, orderDate, isCompleted;
+    
+    if (order.customerFullName && order.customerFullName !== 'undefined undefined') {
+      // Backend order with valid customerFullName
+      customerName = order.customerFullName.toLowerCase();
+      courierName = order.courierFullName?.toLowerCase() || '';
+      bidonCount = order.carboyCount || 0;
+      orderDate = order.orderDate || '';
+      isCompleted = order.orderStatus !== 'PENDING';
+    } else {
+      // Backend order without customerFullName or local order
+      customer = getCustomer(order.customerId);
+      courier = getCourier(order.courierId);
+      customerName = customer ? `${customer.firstName} ${customer.lastName}`.toLowerCase() : '';
+      courierName = courier ? courier.name.toLowerCase() : '';
+      
+      if (order.price && order.carboyCount) {
+        // Backend order
+        bidonCount = order.carboyCount || 0;
+        orderDate = order.orderDate || '';
+        isCompleted = order.orderStatus !== 'PENDING';
+      } else {
+        // Local order
+        bidonCount = order.bidonOrdered || 0;
+        orderDate = order.date || '';
+        isCompleted = order.completed || false;
+      }
+    }
     
     const matchesSearch = orderSearchTerm === '' || 
       customerName.includes(orderSearchTerm.toLowerCase()) ||
       courierName.includes(orderSearchTerm.toLowerCase()) ||
-      order.date.includes(orderSearchTerm) ||
-      order.bidonOrdered.toString().includes(orderSearchTerm);
+      orderDate.includes(orderSearchTerm) ||
+      bidonCount.toString().includes(orderSearchTerm);
     
     const matchesStatus = orderStatusFilter === 'all' || 
-      (orderStatusFilter === 'completed' && order.completed) ||
-      (orderStatusFilter === 'pending' && !order.completed);
+      (orderStatusFilter === 'completed' && isCompleted) ||
+      (orderStatusFilter === 'pending' && !isCompleted);
     
     return matchesSearch && matchesStatus;
   });
 
   const groupedOrders = filteredOrders.reduce((acc, order) => {
-    if (!acc[order.date]) acc[order.date] = [];
-    acc[order.date].push(order);
+    const orderDate = order.orderDate || order.date; // Handle both backend and local orders
+    if (!acc[orderDate]) acc[orderDate] = [];
+    acc[orderDate].push(order);
     return acc;
   }, {});
 
   const sortedDates = Object.keys(groupedOrders).sort((a, b) => new Date(b) - new Date(a));
 
+  // Stats derived from filtered orders
+  const completedOrders = filteredOrders.filter(order => {
+    if (order.orderStatus) {
+      return order.orderStatus !== 'PENDING'; // Backend order
+    }
+    return order.completed; // Local order
+  });
+  
+  const pendingOrders = filteredOrders.filter(order => {
+    if (order.orderStatus) {
+      return order.orderStatus === 'PENDING'; // Backend order
+    }
+    return !order.completed; // Local order
+  });
+  
+  const totalRevenue = completedOrders.reduce((total, order) => {
+    if (order.price) {
+      return total + order.price; // Backend order - price is already calculated
+    } else {
+      const customer = getCustomer(order.customerId);
+      const pricePerBidon = customer?.pricePerBidon ?? 5;
+      return total + (order.bidonOrdered * pricePerBidon); // Local order
+    }
+  }, 0);
+
   const handleCustomerSelect = (customer) => {
-    setNewOrder(prev => ({ ...prev, customerId: customer.id }));
-    setSelectedCustomerName(`${customer.firstName} ${customer.lastName}`);
+    // Backend müştəriləri üçün orijinal ID-ni istifadə et
+    const customerId = customer.originalId || customer.id;
+    
+    setNewOrder(prev => ({ ...prev, customerId: customerId }));
+    const customerName = `${customer.firstName} ${customer.lastName}`;
+    setSelectedCustomerName(customerName);
     setCustomerSearch('');
     setShowCustomerDropdown(false);
   };
@@ -135,7 +357,7 @@ function CustomerPanel() {
     setShowCourierDropdown(false);
   };
 
-  const handleAddOrder = () => {
+  const handleAddOrder = async () => {
     const { customerId, date, bidonOrdered, courierId } = newOrder;
 
     if (!customerId || !date || !bidonOrdered || !courierId) {
@@ -143,19 +365,70 @@ function CustomerPanel() {
       return;
     }
 
-    setNewOrder({ customerId: '', date: '', bidonOrdered: '', courierId: '', paymentMethod: '' });
-    setSelectedCustomerName('');
-    setSelectedCourierName('');
-    setCustomerSearch('');
-    setCourierSearch('');
-    setShowOrderModal(false);
-    setEditingOrder(null);
-    alert('Sifariş uğurla əlavə edildi!');
+    try {
+      // Backend Swagger-ə uyğun data structure  
+      // Problem: orderDate field-ı LocalDate parsing xətası yaradır
+      // Həll: orderDate göndərməyək, backend avtomatik null təyin edir
+      const backendOrderData = {
+        customerId: Number(customerId),
+        courierId: Number(courierId),
+        carboyCount: Number(bidonOrdered), // bidonOrdered əvəzinə carboyCount
+        // orderDate: date, // Bu field problemi yaradır, backend null qəbul edir
+        // orderTime: new Date().toTimeString().split(' ')[0] // Bu da lazım deyil
+      };
+      
+
+
+      if (editingOrder) {
+        // Update existing order
+        await updateOrder({ id: editingOrder.id, ...backendOrderData }).unwrap();
+        alert('Sifariş uğurla yeniləndi!');
+      } else {
+        // Create new order
+        const result = await createOrder(backendOrderData).unwrap();
+        
+        // Also add to local context for immediate UI update
+        addOrderForDate(selectedDate, {
+          customerId: Number(customerId),
+          courierId: Number(courierId),
+          bidonOrdered: Number(bidonOrdered), // Local context üçün orijinal field adı
+          id: result.id || Date.now(),
+          date: date,
+          completed: false,
+          paymentMethod: ''
+        });
+        alert('Sifariş uğurla əlavə edildi!');
+      }
+
+      // Refresh orders from backend
+      await fetchOrdersFromBackend();
+
+      setNewOrder({ customerId: '', date: '', bidonOrdered: '', courierId: '' });
+      setSelectedCustomerName('');
+      setSelectedCourierName('');
+      setCustomerSearch('');
+      setCourierSearch('');
+      setShowOrderModal(false);
+      setEditingOrder(null);
+    } catch (error) {
+      console.error('Error saving order:', error);
+      
+      // Backend error response-u göstər
+      if (error.data && error.data.message) {
+        console.error('Backend error message:', error.data.message);
+        alert(`Backend xətası: ${error.data.message}`);
+      } else if (error.status) {
+        console.error('HTTP status:', error.status);
+        alert(`HTTP xətası: ${error.status}`);
+      } else {
+        alert('Sifariş yadda saxlanılarkən xəta baş verdi. Zəhmət olmasa yenidən cəhd edin.');
+      }
+    }
   };
 
   const openOrderModal = () => {
     setShowOrderModal(true);
-    setNewOrder({ customerId: '', date: '', bidonOrdered: '', courierId: '', paymentMethod: '' });
+    setNewOrder({ customerId: '', date: '', bidonOrdered: '', courierId: '' });
     setSelectedCustomerName('');
     setSelectedCourierName('');
     setCustomerSearch('');
@@ -165,13 +438,86 @@ function CustomerPanel() {
 
   const closeOrderModal = () => {
     setShowOrderModal(false);
-    setNewOrder({ customerId: '', date: '', bidonOrdered: '', courierId: '', paymentMethod: '' });
+    setNewOrder({ customerId: '', date: '', bidonOrdered: '', courierId: '' });
     setSelectedCustomerName('');
     setSelectedCourierName('');
     setCustomerSearch('');
     setCourierSearch('');
     setEditingOrder(null);
   };
+
+  // Order management functions
+  const handleUpdateOrder = async (orderId, updates) => {
+    try {
+      // Backend üçün field adlarını düzəlt
+      const backendUpdates = {
+        carboyCount: updates.bidonOrdered || updates.carboyCount
+        // orderDate və orderTime göndərməyək
+      };
+      
+      await updateOrder({ id: orderId, ...backendUpdates }).unwrap();
+      await fetchOrdersFromBackend();
+      alert('Sifariş uğurla yeniləndi!');
+    } catch (error) {
+      console.error('Error updating order:', error);
+      alert('Sifariş yenilənərkən xəta baş verdi. Zəhmət olmasa yenidən cəhd edin.');
+    }
+  };
+
+  const handleDeleteOrder = async (orderId) => {
+    if (!confirm('Bu sifarişi silmək istədiyinizə əminsiniz?')) {
+      return;
+    }
+
+    // Debug: Log the order ID being passed
+    console.log('Attempting to delete order with ID:', orderId);
+    console.log('Order ID type:', typeof orderId);
+    console.log('Order ID value:', orderId);
+
+    // Check if this is a temporary ID (backend issue)
+    if (typeof orderId === 'number' && orderId <= 100) {
+      alert('⚠️ Bu müvəqqəti ID-dir. Backend API-də sifarişlər ID sahəsi olmadan qaytarılır. Backend developer ilə əlaqə saxlayın.');
+      console.error('Backend API issue: Orders returned without ID field');
+      return;
+    }
+
+    // Check if orderId is undefined (backend doesn't provide ID)
+    if (orderId === undefined || orderId === null) {
+      alert('❌ Sifariş ID-si tapılmadı. Backend API-də problem var.');
+      console.error('Order ID is undefined - backend API issue');
+      return;
+    }
+
+    try {
+      await deleteOrder(orderId).unwrap();
+      await fetchOrdersFromBackend();
+      alert('Sifariş uğurla silindi!');
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      alert('Sifariş silinərkən xəta baş verdi. Zəhmət olmasa yenidən cəhd edin.');
+    }
+  };
+
+  const openEditOrderModal = (order) => {
+    setEditingOrder(order);
+    setNewOrder({
+      customerId: order.customerId,
+      date: order.orderDate || order.date,
+      bidonOrdered: order.bidonOrdered,
+      courierId: order.courierId,
+    });
+    setSelectedCustomerName(() => {
+      const customer = getCustomer(order.customerId);
+      return customer ? `${customer.firstName} ${customer.lastName}` : '';
+    });
+    setSelectedCourierName(() => {
+      const courier = getCourier(order.courierId);
+      return courier ? courier.name : '';
+    });
+    setShowOrderModal(true);
+  };
+
+  // Sifarişi tamamla funksionallığı bu paneldən çıxarıldı (kuryer panelində olacaq)
 
   const selectedCustomer = newOrder.customerId ? getCustomer(newOrder.customerId) : null;
   const selectedCourier = newOrder.courierId ? getCourier(newOrder.courierId) : null;
@@ -184,6 +530,30 @@ function CustomerPanel() {
       background: '#f8fafc',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
+      <style>
+        {`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          .animate-spin {
+            animation: spin 1s linear infinite;
+          }
+        `}
+      </style>
+      {/* Backend API Warning */}
+      <div style={{
+        background: '#fef3c7',
+        border: '1px solid #fde68a',
+        color: '#92400e',
+        padding: '0.75rem 1rem',
+        textAlign: 'center',
+        fontSize: '0.9rem',
+        fontWeight: '500'
+      }}>
+        ⚠️ Backend API problemi: Sifarişlər ID sahəsi olmadan qaytarılır. Silmə və redaktə funksiyaları işləməyəcək. Backend developer ilə əlaqə saxlayın.
+      </div>
+
       {/* Mobile Header */}
       <div style={{ 
         background: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)', 
@@ -211,13 +581,45 @@ function CustomerPanel() {
           </div>
         </div>
       </div>
+      {/* Date Picker for viewing orders by date */}
+      <div style={{ padding: '1rem', paddingTop: '0.75rem' }}>
+        <div style={{ 
+          background: 'white', 
+          borderRadius: '12px', 
+          padding: '0.75rem 1rem',
+          border: '1px solid #e5e7eb',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.75rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#374151', fontWeight: 600 }}>
+            <Calendar size={16} />
+            Tarix seçin
+          </div>
+          <input 
+            type="date" 
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            style={{
+              padding: '0.6rem 0.75rem',
+              border: '2px solid #e5e7eb',
+              borderRadius: '0.75rem',
+              fontSize: '0.95rem',
+              background: '#f9fafb',
+              color: '#374151',
+              outline: 'none'
+            }}
+          />
+        </div>
+      </div>
 
-      {/* Add Order Button */}
-      <div style={{ padding: '1rem' }}>
+      {/* Add Order Button and Refresh */}
+      <div style={{ padding: '1rem', display: 'flex', gap: '1rem' }}>
         <button
           onClick={openOrderModal}
           style={{
-            width: '100%',
+            flex: 1,
             padding: '1rem',
             background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
             color: 'white',
@@ -235,6 +637,33 @@ function CustomerPanel() {
         >
           <Plus size={20} />
           Yeni Sifariş
+        </button>
+        
+        <button
+          onClick={() => {
+            fetchOrdersFromBackend();
+            fetchCustomersFromBackend();
+          }}
+          disabled={isLoadingOrders || isLoadingCustomers}
+          style={{
+            padding: '1rem',
+            background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '12px',
+            fontSize: '1rem',
+            fontWeight: '600',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+            cursor: isLoadingOrders ? 'not-allowed' : 'pointer',
+            opacity: isLoadingOrders ? 0.6 : 1,
+            boxShadow: '0 4px 12px rgba(59,130,246,0.3)'
+          }}
+        >
+          {isLoadingOrders || isLoadingCustomers ? <Loader2 size={20} className="animate-spin" /> : <Package size={20} />}
+          {isLoadingOrders || isLoadingCustomers ? 'Yenilənir...' : 'Yenilə'}
         </button>
       </div>
 
@@ -302,7 +731,7 @@ function CustomerPanel() {
 
             {/* Modal Content */}
             <div style={{ padding: '1.5rem' }}>
-              {customers.length === 0 ? (
+              {customersForOperations.length === 0 ? (
                 <div style={{ 
                   padding: '2rem', 
                   textAlign: 'center', 
@@ -622,7 +1051,7 @@ function CustomerPanel() {
                     )}
                   </div>
 
-                  {/* Ödəniş Metodu */}
+                  {/* Məbləğ Göstərilməsi */}
                   <div>
                     <label style={{ 
                       display: 'block', 
@@ -635,27 +1064,22 @@ function CustomerPanel() {
                       gap: '0.5rem'
                     }}>
                       <DollarSign size={16} />
-                      Ödəniş Metodu
+                      Hesablanmış Məbləğ
                     </label>
-                    <select
-                      value={newOrder.paymentMethod || ''}
-                      onChange={(e) => setNewOrder({ ...newOrder, paymentMethod: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '1rem',
-                        border: '2px solid #e5e7eb',
-                        borderRadius: '12px',
-                        fontSize: '1rem',
-                        background: 'white',
-                        outline: 'none',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      <option value="">Ödəniş Metodu Seçin</option>
-                      <option value="cash">Nağd</option>
-                      <option value="card">Kart</option>
-                      <option value="credit">Nəsiyə</option>
-                    </select>
+                    <div style={{
+                      width: '100%',
+                      padding: '1rem',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '12px',
+                      fontSize: '1rem',
+                      background: '#f0fdf4',
+                      color: '#16a34a',
+                      fontWeight: '700',
+                      textAlign: 'center',
+                      boxSizing: 'border-box'
+                    }}>
+                      {totalAmount > 0 ? `${totalAmount} AZN` : 'Məbləğ hesablanacaq'}
+                    </div>
                   </div>
 
                   {/* Məlumat Preview */}
@@ -718,7 +1142,7 @@ function CustomerPanel() {
               </button>
               <button
                 onClick={handleAddOrder}
-                disabled={customers.length === 0}
+                disabled={customersForOperations.length === 0 || isCreatingOrder || isUpdatingOrder}
                 style={{
                   flex: 1,
                   background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
@@ -728,8 +1152,8 @@ function CustomerPanel() {
                   border: 'none',
                   fontSize: '1rem',
                   fontWeight: '600',
-                  cursor: customers.length === 0 ? 'not-allowed' : 'pointer',
-                  opacity: customers.length === 0 ? 0.6 : 1,
+                  cursor: (customersForOperations.length === 0 || isCreatingOrder || isUpdatingOrder) ? 'not-allowed' : 'pointer',
+                  opacity: (customersForOperations.length === 0 || isCreatingOrder || isUpdatingOrder) ? 0.6 : 1,
                   boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)',
                   display: 'flex',
                   alignItems: 'center',
@@ -737,47 +1161,98 @@ function CustomerPanel() {
                   gap: '0.5rem'
                 }}
               >
-                <Plus size={20} />
-                {editingOrder ? 'Sifarişi Yenilə' : 'Sifarişi Yarat'}
+                {(isCreatingOrder || isUpdatingOrder) ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : (
+                  <Plus size={20} />
+                )}
+                {isCreatingOrder ? 'Yaradılır...' : isUpdatingOrder ? 'Yenilənir...' : (editingOrder ? 'Sifarişi Yenilə' : 'Sifarişi Yarat')}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Statistics */}
+      
+
+      {/* Statistics (moved from Daily Process) */}
       <div style={{ padding: '0 1rem 1rem' }}>
         <div style={{ 
           display: 'grid', 
           gridTemplateColumns: '1fr 1fr', 
-          gap: '1rem' 
+          gap: '1rem',
+          marginBottom: '0.5rem'
         }}>
-          <div style={{ 
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 
-            color: 'white', 
-            padding: '1.25rem', 
-            borderRadius: '16px', 
+          <div style={{
+            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+            color: 'white',
+            padding: '1.25rem',
+            borderRadius: '16px',
             textAlign: 'center',
             boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
           }}>
-            <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.5rem', fontWeight: '700' }}>
-              {testOrders.length}
-            </h3>
-            <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.9 }}>Ümumi</p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <Package size={16} />
+              <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>ÜMUMİ</span>
+            </div>
+            <div style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '0.25rem' }}>
+              {filteredOrders.length}
+            </div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>sifariş</div>
           </div>
-          
-          <div style={{ 
-            background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', 
-            color: 'white', 
-            padding: '1.25rem', 
-            borderRadius: '16px', 
+
+          <div style={{
+            background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+            color: 'white',
+            padding: '1.25rem',
+            borderRadius: '16px',
+            textAlign: 'center',
+            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <CheckCircle size={16} />
+              <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>HAZIR</span>
+            </div>
+            <div style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '0.25rem' }}>
+              {completedOrders.length}
+            </div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>sifariş</div>
+          </div>
+
+          <div style={{
+            background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+            color: 'white',
+            padding: '1.25rem',
+            borderRadius: '16px',
             textAlign: 'center',
             boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)'
           }}>
-            <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.5rem', fontWeight: '700' }}>
-              {testOrders.filter(o => !o.completed).length}
-            </h3>
-            <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.9 }}>Gözləyən</p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <Clock size={16} />
+              <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>GÖZLƏYƏN</span>
+            </div>
+            <div style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '0.25rem' }}>
+              {pendingOrders.length}
+            </div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>sifariş</div>
+          </div>
+
+          <div style={{
+            background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+            color: 'white',
+            padding: '1.25rem',
+            borderRadius: '16px',
+            textAlign: 'center',
+            boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <DollarSign size={16} />
+              <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>GƏLİR</span>
+            </div>
+            <div style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '0.25rem' }}>
+              {totalRevenue}
+            </div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>AZN</div>
           </div>
         </div>
       </div>
@@ -819,32 +1294,195 @@ function CustomerPanel() {
             </div>
           </div>
           
-          <select
-            value={orderStatusFilter}
-            onChange={(e) => setOrderStatusFilter(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '1rem',
-              border: '2px solid #e5e7eb',
-              borderRadius: '12px',
-              fontSize: '1rem',
-              background: 'white',
-              outline: 'none',
-              boxSizing: 'border-box'
-            }}
-          >
-            <option value="all">Bütün Sifarişlər</option>
-            <option value="pending">Gözləyən</option>
-            <option value="completed">Tamamlanmış</option>
-          </select>
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <select
+              value={orderStatusFilter}
+              onChange={(e) => setOrderStatusFilter(e.target.value)}
+              style={{
+                flex: 1,
+                padding: '1rem',
+                border: '2px solid #e5e7eb',
+                borderRadius: '12px',
+                fontSize: '1rem',
+                background: 'white',
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+            >
+              <option value="all">Bütün Sifarişlər</option>
+              <option value="pending">Gözləyən</option>
+              <option value="completed">Tamamlanmış</option>
+            </select>
+            
+            <button
+              onClick={() => {
+                fetchOrdersFromBackend();
+                fetchCustomersFromBackend();
+              }}
+              disabled={isLoadingOrders || isLoadingCustomers}
+              style={{
+                padding: '1rem',
+                background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                fontSize: '1rem',
+                fontWeight: '600',
+                cursor: isLoadingOrders ? 'not-allowed' : 'pointer',
+                opacity: isLoadingOrders ? 0.6 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              {isLoadingOrders || isLoadingCustomers ? <Loader2 size={16} className="animate-spin" /> : <Package size={16} />}
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Orders List */}
       <div style={{ padding: '0 1rem 2rem' }}>
-        {sortedDates.length > 0 ? (
+        {/* Loading State */}
+        {isLoadingOrders && (
+          <div style={{ 
+            background: 'white',
+            borderRadius: '16px',
+            padding: '3rem 1.5rem',
+            textAlign: 'center', 
+            color: '#64748b',
+            border: '2px dashed #cbd5e1',
+            marginBottom: '1rem'
+          }}>
+            <Loader2 size={48} className="animate-spin" style={{ marginBottom: '1rem', color: '#94a3b8' }} />
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '600', margin: '0 0 0.5rem 0' }}>
+              Sifarişlər yüklənir...
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.95rem' }}>
+              Zəhmət olmasa gözləyin
+            </p>
+          </div>
+        )}
+        
+        {/* Desktop Table View (CustomerData table style) */}
+        {!isLoadingOrders && typeof window !== 'undefined' && window.innerWidth >= 768 && filteredOrders.length > 0 && (
+          <div style={{ background: 'white', borderRadius: '1rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.1)', border: '1px solid #f1f5f9', marginBottom: '1rem' }}>
+            <div style={{ background: 'linear-gradient(135deg, #1f2937 0%, #111827 100%)', padding: '1.5rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'white', margin: 0 }}>Sifariş Siyahısı</h2>
+              <p style={{ color: '#d1d5db', margin: 0, fontSize: '0.875rem' }}>Bütün sifariş məlumatları</p>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
+                <thead>
+                  <tr style={{ background: 'linear-gradient(135deg, #dbeafe 0%, #c7d2fe 100%)' }}>
+                    <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Tarix</th>
+                    <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Müştəri</th>
+                    <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Kuryer</th>
+                    <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Bidon</th>
+                    <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Məbləğ</th>
+                    <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Ödəniş</th>
+                    <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Status</th>
+                    <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Əməliyyat</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedDates.map(date => (
+                    groupedOrders[date].map((order) => {
+                      // Handle both backend and local order data
+                      let customer, courier, amount, bidonCount, orderStatus;
+                      
+                      if (order.customerFullName && order.customerFullName !== 'undefined undefined') {
+                        // Backend order - customer info is embedded
+                        customer = {
+                          firstName: order.customerFullName.split(' ')[0] || '',
+                          lastName: order.customerFullName.split(' ').slice(1).join(' ') || '',
+                          phone: order.customerPhoneNumber || '',
+                          address: order.customerAddress || '',
+                          pricePerBidon: order.price / order.carboyCount || 5
+                        };
+                        courier = { name: order.courierFullName || '—' };
+                        amount = order.price || 0;
+                        bidonCount = order.carboyCount || 0;
+                        orderStatus = order.orderStatus === 'PENDING' ? false : true; // PENDING = false (not completed)
+                      } else {
+                        // Backend order without customerFullName or local order - get from context
+                        customer = getCustomer(order.customerId);
+                        courier = getCourier(order.courierId);
+                        
+                        if (order.price && order.carboyCount) {
+                          // Backend order
+                          amount = order.price || 0;
+                          bidonCount = order.carboyCount || 0;
+                          orderStatus = order.orderStatus === 'PENDING' ? false : true;
+                        } else {
+                          // Local order
+                          amount = (order.bidonOrdered || 0) * (customer?.pricePerBidon ?? 5);
+                          bidonCount = order.bidonOrdered || 0;
+                          orderStatus = order.completed || false;
+                        }
+                      }
+                      
+                      return (
+                        <tr key={order.tempId || order.id || `order-${index}`}>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{date}</td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{customer ? `${customer.firstName} ${customer.lastName}` : 'Naməlum'}</td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{courier ? courier.name : '—'}</td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{bidonCount}</td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', color: '#16a34a', fontWeight: 700 }}>{amount} AZN</td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
+                            {orderStatus && order.paymentMethod ? (order.paymentMethod === 'cash' ? 'Nağd' : order.paymentMethod === 'card' ? 'Kart' : order.paymentMethod === 'credit' ? 'Nəsiyə' : '—') : '—'}
+                          </td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
+                            <span style={{
+                              padding: '4px 10px',
+                              borderRadius: '9999px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              background: orderStatus ? '#d1fae5' : '#fef3c7',
+                              color: orderStatus ? '#065f46' : '#92400e',
+                              border: `1px solid ${orderStatus ? '#a7f3d0' : '#fde68a'}`
+                            }}>
+                              {orderStatus ? 'Tamamlandı' : 'Gözləyir'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                              <button
+                                onClick={() => openEditOrderModal(order)}
+                                style={{ background: '#3b82f6', color: 'white', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '500' }}
+                              >
+                                Redaktə
+                              </button>
+                              <button
+                                onClick={() => {
+                                  console.log('Order object being deleted:', order);
+                                  console.log('Order ID field:', order.id);
+                                  console.log('Order tempId field:', order.tempId);
+                                  // Use tempId if id is not available
+                                  const orderIdToDelete = order.id || order.tempId;
+                                  handleDeleteOrder(orderIdToDelete);
+                                }}
+                                style={{ background: '#ef4444', color: 'white', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '500' }}
+                              >
+                                Sil
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Card View (default) */}
+        {!isLoadingOrders && sortedDates.length > 0 ? (
           sortedDates.map(date => (
-            <div key={date} style={{ marginBottom: '1rem' }}>
+            <div key={date} style={{ marginBottom: '1rem', display: (typeof window !== 'undefined' && window.innerWidth >= 768) ? 'none' : 'block' }}>
               {/* Date Header */}
               <div style={{
                 background: 'white',
@@ -867,8 +1505,40 @@ function CustomerPanel() {
 
               {/* Orders for this date */}
               {groupedOrders[date].map((order, index) => {
-                const customer = getCustomer(order.customerId);
-                const courier = getCourier(order.courierId);
+                // Handle both backend and local order data
+                let customer, courier, bidonCount, amount, orderStatus;
+                
+                if (order.customerFullName && order.customerFullName !== 'undefined undefined') {
+                  // Backend order - customer info is embedded
+                  customer = {
+                    firstName: order.customerFullName.split(' ')[0] || '',
+                    lastName: order.customerFullName.split(' ').slice(1).join(' ') || '',
+                    phone: order.customerPhoneNumber || '',
+                    address: order.customerAddress || '',
+                    pricePerBidon: order.price / order.carboyCount || 5
+                  };
+                  courier = { name: order.courierFullName || '—' };
+                  bidonCount = order.carboyCount || 0;
+                  amount = order.price || 0;
+                  orderStatus = order.orderStatus === 'PENDING' ? false : true;
+                } else {
+                  // Backend order without customerFullName or local order - get from context
+                  customer = getCustomer(order.customerId);
+                  courier = getCourier(order.courierId);
+                  
+                  if (order.price && order.carboyCount) {
+                    // Backend order
+                    bidonCount = order.carboyCount || 0;
+                    amount = order.price || 0;
+                    orderStatus = order.orderStatus === 'PENDING' ? false : true;
+                  } else {
+                    // Local order
+                    bidonCount = order.bidonOrdered || 0;
+                    amount = bidonCount * (customer?.pricePerBidon ?? 5);
+                    orderStatus = order.completed || false;
+                  }
+                }
+                
                 const isLast = index === groupedOrders[date].length - 1;
                 
                 return (
@@ -909,18 +1579,18 @@ function CustomerPanel() {
                         </p>
                       </div>
                       
-                      <div style={{ 
-                        padding: '0.4rem 0.8rem', 
-                        borderRadius: '20px', 
-                        fontSize: '0.75rem', 
-                        fontWeight: '600',
-                        background: order.completed ? '#d1fae5' : '#fef3c7',
-                        color: order.completed ? '#065f46' : '#92400e',
-                        border: `1px solid ${order.completed ? '#a7f3d0' : '#fde68a'}`,
-                        whiteSpace: 'nowrap'
-                      }}>
-                        {order.completed ? 'Tamamlandı' : 'Gözləyir'}
-                      </div>
+                                              <div style={{ 
+                          padding: '0.4rem 0.8rem', 
+                          borderRadius: '20px', 
+                          fontSize: '0.75rem', 
+                          fontWeight: '600',
+                          background: orderStatus ? '#d1fae5' : '#fef3c7',
+                          color: orderStatus ? '#065f46' : '#92400e',
+                          border: `1px solid ${orderStatus ? '#a7f3d0' : '#fde68a'}`,
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {orderStatus ? 'Tamamlandı' : 'Gözləyir'}
+                        </div>
                     </div>
 
                     {/* Order Details */}
@@ -941,9 +1611,9 @@ function CustomerPanel() {
                         <Droplets size={16} style={{ color: '#3b82f6' }} />
                         <div>
                           <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>Bidon</div>
-                          <div style={{ fontSize: '1rem', fontWeight: '600', color: '#374151' }}>
-                            {order.bidonOrdered}
-                          </div>
+                                                  <div style={{ fontSize: '1rem', fontWeight: '600', color: '#374151' }}>
+                          {bidonCount}
+                        </div>
                         </div>
                       </div>
 
@@ -958,9 +1628,9 @@ function CustomerPanel() {
                         <DollarSign size={16} style={{ color: '#16a34a' }} />
                         <div>
                           <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>Məbləğ</div>
-                          <div style={{ fontSize: '1rem', fontWeight: '600', color: '#16a34a' }}>
-                            {order.bidonOrdered * (customer?.pricePerBidon ?? 5)} AZN
-                          </div>
+                                                  <div style={{ fontSize: '1rem', fontWeight: '600', color: '#16a34a' }}>
+                          {amount} AZN
+                        </div>
                         </div>
                       </div>
                     </div>
@@ -1008,7 +1678,7 @@ function CustomerPanel() {
                       justifyContent: 'center'
                     }}>
                       <button
-                        onClick={() => alert('Redaktə funksiyası')}
+                        onClick={() => openEditOrderModal(order)}
                         style={{
                           flex: 1,
                           padding: '0.75rem',
@@ -1030,9 +1700,12 @@ function CustomerPanel() {
                       </button>
                       <button
                         onClick={() => {
-                          if (confirm('Bu sifarişi silmək istədiyinizə əminsiniz?')) {
-                            alert('Sifariş silindi');
-                          }
+                          console.log('Mobile - Order object being deleted:', order);
+                          console.log('Mobile - Order ID field:', order.id);
+                          console.log('Mobile - Order tempId field:', order.tempId);
+                          // Use tempId if id is not available
+                          const orderIdToDelete = order.id || order.tempId;
+                          handleDeleteOrder(orderIdToDelete);
                         }}
                         style={{
                           flex: 1,
@@ -1059,7 +1732,7 @@ function CustomerPanel() {
               })}
             </div>
           ))
-        ) : (
+        ) : !isLoadingOrders ? (
           <div style={{ 
             background: 'white',
             borderRadius: '16px',
@@ -1076,7 +1749,7 @@ function CustomerPanel() {
               Yeni sifariş əlavə etməklə başlayın
             </p>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

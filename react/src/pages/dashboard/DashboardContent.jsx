@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useOrders } from '../../contexts/OrdersContext';
 import { 
   Calendar, 
   DollarSign, 
@@ -9,6 +10,7 @@ import {
   Clock, 
   Truck,
   BarChart3,
+  Search,
   Filter,
   Download,
   Phone,
@@ -17,71 +19,26 @@ import {
 } from 'lucide-react';
 
 export default function DashboardContent() {
+  const { customers: ctxCustomers, getOrdersForDate } = useOrders();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [filterStatus, setFilterStatus] = useState('all');
   const [expandedOrder, setExpandedOrder] = useState(null);
+  const [orderSearch, setOrderSearch] = useState('');
 
-  // Test məlumatları
-  const customers = [
+  const customers = ctxCustomers && ctxCustomers.length > 0 ? ctxCustomers : [
     { id: 1, firstName: 'Əli', lastName: 'Məmmədov', phone: '+994501234567', pricePerBidon: 5 },
     { id: 2, firstName: 'Ayşə', lastName: 'Həsənova', phone: '+994551234567', pricePerBidon: 6 },
     { id: 3, firstName: 'Vüsal', lastName: 'Əliyev', phone: '+994701234567', pricePerBidon: 5 }
   ];
 
-  const testOrders = [
-    {
-      id: 1,
-      customerId: 1,
-      courierId: 1,
-      date: '2024-01-15',
-      bidonOrdered: 10,
-      bidonReturned: 8,
-      bidonTakenByCourier: 2,
-      bidonRemaining: 0,
-      paymentMethod: 'cash',
-      completed: true,
-      completedAt: '2024-01-15T14:30:00',
-      courierNotes: 'Müştəri evdə idi, sifariş uğurla çatdırıldı'
-    },
-    {
-      id: 2,
-      customerId: 2,
-      courierId: 2,
-      date: '2024-01-15',
-      bidonOrdered: 15,
-      bidonReturned: 0,
-      bidonTakenByCourier: 0,
-      bidonRemaining: 15,
-      paymentMethod: 'credit',
-      completed: false,
-      completedAt: null,
-      courierNotes: 'Müştəri evdə deyildi, növbəti dəfə çatdırılacaq'
-    },
-    {
-      id: 3,
-      customerId: 3,
-      courierId: 1,
-      date: '2024-01-15',
-      bidonOrdered: 8,
-      bidonReturned: 6,
-      bidonTakenByCourier: 2,
-      bidonRemaining: 0,
-      paymentMethod: 'cash',
-      completed: true,
-      completedAt: '2024-01-15T16:45:00',
-      courierNotes: 'Sifariş tamamlandı, müştəri məmnun'
-    }
-  ];
+  const dailyOrders = useMemo(() => getOrdersForDate(selectedDate), [getOrdersForDate, selectedDate]);
 
   const testCouriers = {
     1: { name: 'Əli Məmmədov', phone: '+994501234567' },
     2: { name: 'Nicat Həsənov', phone: '+994551234567' }
   };
 
-  // Seçilmiş tarixə görə sifarişləri filtrlə
-  const dailyOrders = useMemo(() => {
-    return testOrders.filter(order => order.date === selectedDate);
-  }, [selectedDate]);
+  // Seçilmiş tarixə görə sifarişlər artıq dailyOrders-dadır
 
   // Tamamlanmış sifarişlər
   const completedOrders = dailyOrders.filter(order => order.completed);
@@ -153,10 +110,26 @@ export default function DashboardContent() {
   };
 
   const filteredOrders = dailyOrders.filter(order => {
-    if (filterStatus === 'all') return true;
-    if (filterStatus === 'completed') return order.completed;
-    if (filterStatus === 'pending') return !order.completed;
-    return true;
+    const statusMatch = (
+      filterStatus === 'all' ||
+      (filterStatus === 'completed' && order.completed) ||
+      (filterStatus === 'pending' && !order.completed)
+    );
+
+    if (!statusMatch) return false;
+
+    if (!orderSearch) return true;
+
+    const customer = getCustomer(order.customerId);
+    const courier = getCourier(order.courierId);
+    const haystack = [
+      `#${order.id}`,
+      `${customer.firstName} ${customer.lastName}`,
+      courier.name,
+      order.date,
+      String(order.bidonOrdered)
+    ].join(' ').toLowerCase();
+    return haystack.includes(orderSearch.toLowerCase());
   });
 
   return (
@@ -165,68 +138,87 @@ export default function DashboardContent() {
       background: '#f8fafc',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
-      {/* Mobile Header */}
-      <div style={{ 
-        background: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)', 
-        color: 'white',
-        padding: '1rem',
-        top: 0,
-        zIndex: 100,
-        borderBottom: '1px solid rgba(255,255,255,0.1)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-          <div style={{ 
-            width: '40px', 
-            height: '40px', 
-            background: 'rgba(255,255,255,0.2)', 
-            borderRadius: '10px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center'
-          }}>
-            <BarChart3 size={20} />
-          </div>
-          <div>
-            <h1 style={{ fontSize: '1.25rem', fontWeight: '700', margin: 0 }}>Dashboard</h1>
-            <p style={{ fontSize: '0.8rem', margin: 0, opacity: 0.9 }}>Günlük proseslər</p>
-          </div>
-        </div>
+      {/* Formal Header Card (aligned with CustomerData) */}
+      <div style={{ padding: '1rem' }}>
+        <div style={{
+          background: 'white',
+          borderRadius: '1rem',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.1)',
+          border: '1px solid #f1f5f9',
+          padding: '1.25rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%' }}>
+              <div style={{
+                background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                padding: '0.75rem',
+                borderRadius: '0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <BarChart3 size={24} color="white" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#1f2937', margin: '0 0 4px 0' }}>Günlük Proseslər</h1>
+                <p style={{ color: '#6b7280', margin: 0, fontSize: '0.9rem' }}>Seçilmiş tarix üçün sifarişlərin idarəsi</p>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  style={{
+                    padding: '0.6rem 0.75rem',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '0.75rem',
+                    fontSize: '0.95rem',
+                    background: '#f9fafb',
+                    color: '#374151',
+                    outline: 'none',
+                  }}
+                />
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  style={{
+                    padding: '0.6rem 0.75rem',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '0.75rem',
+                    fontSize: '0.95rem',
+                    background: '#f9fafb',
+                    color: '#374151',
+                    outline: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="all">Bütün Sifarişlər</option>
+                  <option value="completed">Tamamlanmış</option>
+                  <option value="pending">Gözləyən</option>
+                </select>
+              </div>
+            </div>
 
-        {/* Date and Filter Controls */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            style={{
-              padding: '0.75rem',
-              border: 'none',
-              borderRadius: '12px',
-              fontSize: '1rem',
-              background: 'rgba(255, 255, 255, 0.95)',
-              color: '#374151',
-              outline: 'none',
-            }}
-          />
-
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            style={{
-              padding: '0.75rem',
-              border: 'none',
-              borderRadius: '12px',
-              fontSize: '1rem',
-              background: 'rgba(255, 255, 255, 0.95)',
-              color: '#374151',
-              outline: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            <option value="all">Bütün Sifarişlər</option>
-            <option value="completed">Tamamlanmış</option>
-            <option value="pending">Gözləyən</option>
-          </select>
+            <div style={{ position: 'relative', width: '100%', maxWidth: '600px' }}>
+              <Search size={18} color="#6b7280" style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)' }} />
+              <input
+                type="text"
+                placeholder="Sifariş axtar... (ID, müştəri, kuryer, tarix, bidon)"
+                value={orderSearch}
+                onChange={(e) => setOrderSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.875rem 1rem 0.875rem 3rem',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '0.75rem',
+                  fontSize: '1rem',
+                  background: '#f9fafb',
+                  transition: 'all 0.3s ease',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -238,77 +230,11 @@ export default function DashboardContent() {
           gap: '1rem',
           marginBottom: '1.5rem'
         }}>
-          <div style={{
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-            color: 'white',
-            padding: '1.25rem',
-            borderRadius: '16px',
-            textAlign: 'center',
-            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-              <Package size={16} />
-              <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>ÜMUMİ</span>
-            </div>
-            <div style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '0.25rem' }}>
-              {dailyOrders.length}
-            </div>
-            <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>sifariş</div>
-          </div>
+        
 
-          <div style={{
-            background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-            color: 'white',
-            padding: '1.25rem',
-            borderRadius: '16px',
-            textAlign: 'center',
-            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-              <CheckCircle size={16} />
-              <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>HAZIR</span>
-            </div>
-            <div style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '0.25rem' }}>
-              {completedOrders.length}
-            </div>
-            <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>sifariş</div>
-          </div>
+         
 
-          <div style={{
-            background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-            color: 'white',
-            padding: '1.25rem',
-            borderRadius: '16px',
-            textAlign: 'center',
-            boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-              <Clock size={16} />
-              <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>GÖZLƏYƏN</span>
-            </div>
-            <div style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '0.25rem' }}>
-              {pendingOrders.length}
-            </div>
-            <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>sifariş</div>
-          </div>
-
-          <div style={{
-            background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-            color: 'white',
-            padding: '1.25rem',
-            borderRadius: '16px',
-            textAlign: 'center',
-            boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-              <DollarSign size={16} />
-              <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>GƏLİR</span>
-            </div>
-            <div style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '0.25rem' }}>
-              {dailyRevenue}
-            </div>
-            <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>AZN</div>
-          </div>
+         
         </div>
 
         {/* Courier Performance */}
@@ -415,6 +341,74 @@ export default function DashboardContent() {
             Günlük Sifarişlər ({filteredOrders.length})
           </h2>
 
+          {/* Desktop Table View (formal like CustomerData) */}
+          {typeof window !== 'undefined' && window.innerWidth >= 768 && (
+            <div style={{ background: 'white', borderRadius: '1rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.1)', border: '1px solid #f1f5f9', marginBottom: '1.5rem' }}>
+              <div style={{ background: 'linear-gradient(135deg, #1f2937 0%, #111827 100%)', padding: '1.5rem' }}>
+                <h3 style={{ color: 'white', margin: 0, fontSize: '1.1rem', fontWeight: 'bold' }}>Sifariş Siyahısı</h3>
+                <p style={{ color: '#d1d5db', margin: 0, fontSize: '0.875rem' }}>
+                  {orderSearch ? `"${orderSearch}" axtarışı üçün nəticələr` : 'Bütün sifarişlər'}
+                </p>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
+                  <thead>
+                    <tr style={{ background: 'linear-gradient(135deg, #dbeafe 0%, #c7d2fe 100%)' }}>
+                      <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>ID</th>
+                      <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Müştəri</th>
+                      <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Kuryer</th>
+                      <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Bidon</th>
+                      <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Məbləğ</th>
+                      <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Metod</th>
+                      <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Status</th>
+                      <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Vaxt</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan="8" style={{ padding: '1.25rem', textAlign: 'center', color: '#6b7280' }}>
+                          Nəticə tapılmadı
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredOrders.map(order => {
+                        const customer = getCustomer(order.customerId);
+                        const courier = getCourier(order.courierId);
+                        const orderAmount = order.bidonOrdered * (customer.pricePerBidon || 5);
+                        return (
+                          <tr key={order.id} style={{ background: '#fff' }}>
+                            <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>#{order.id}</td>
+                            <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{customer.firstName} {customer.lastName}</td>
+                            <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{courier.name}</td>
+                            <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{order.bidonOrdered}</td>
+                            <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', color: '#16a34a', fontWeight: 700 }}>{orderAmount} AZN</td>
+                            <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{order.completed && order.paymentMethod ? (order.paymentMethod === 'credit' ? 'Nəsiyə' : order.paymentMethod === 'card' ? 'Kart' : 'Nağd') : '—'}</td>
+                            <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
+                              <span style={{
+                                padding: '4px 10px',
+                                borderRadius: '9999px',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                background: order.completed ? '#d1fae5' : '#fef3c7',
+                                color: order.completed ? '#065f46' : '#92400e',
+                                border: `1px solid ${order.completed ? '#a7f3d0' : '#fde68a'}`
+                              }}>
+                                {order.completed ? 'Hazır' : 'Gözləyir'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{order.completed ? formatTime(order.completedAt) : '—'}</td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Mobile Cards */}
           {filteredOrders.length === 0 ? (
             <div style={{ 
               textAlign: 'center', 
@@ -433,7 +427,7 @@ export default function DashboardContent() {
               </p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: (typeof window !== 'undefined' && window.innerWidth >= 768) ? 'none' : 'flex', flexDirection: 'column', gap: '1rem' }}>
               {filteredOrders.map(order => {
                 const customer = getCustomer(order.customerId);
                 const courier = getCourier(order.courierId);
@@ -556,10 +550,7 @@ export default function DashboardContent() {
                                 <span style={{ color: '#6b7280' }}>Kuryer götürdü: </span>
                                 <span style={{ fontWeight: '600', color: '#374151' }}>{order.bidonTakenByCourier}</span>
                               </div>
-                              <div>
-                                <span style={{ color: '#6b7280' }}>Qalan: </span>
-                                <span style={{ fontWeight: '600', color: '#374151' }}>{order.bidonRemaining}</span>
-                              </div>
+                              
                             </div>
                             
                             <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #e5e7eb' }}>

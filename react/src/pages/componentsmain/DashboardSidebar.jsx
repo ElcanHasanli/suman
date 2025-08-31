@@ -79,7 +79,7 @@ export default function DashboardSidebar({ isMobile = false, onMobileClose }) {
           className="sidebar-nav-link"
           onClick={handleNavClick}
         >
-          <span>Müştəri Bazası</span>
+          <span>Müştərilər</span>
         </NavLink>
         <NavLink 
           to="/dashboard/customerpanel" 
@@ -105,14 +105,7 @@ export default function DashboardSidebar({ isMobile = false, onMobileClose }) {
         >
           <span>Ödənişlər</span>
         </NavLink>
-        <NavLink 
-          to="/dashboard/balance" 
-          style={menuItemStyle} 
-          className="sidebar-nav-link"
-          onClick={handleNavClick}
-        >
-          <span>Qalıqlar</span>
-        </NavLink>
+        {/** Balance menu removed as per new requirements */}
         
      
         <NavLink 
