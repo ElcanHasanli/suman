@@ -9,6 +9,7 @@ import CustomerData from './pages/dashboard/CustomerData';
 import CourierPanel from './pages/CourierPanel';
 import DashboardContent from './pages/dashboard/DashboardContent';
 import Payments from './pages/dashboard/Payments';
+import DailyProcesses from './pages/dashboard/DailyProcesses';
 import { useDarkMode } from './components/useDarkMode';
 import ScrollToTop from "./components/ScrollToTop";
 import { ToastContainer } from 'react-toastify';
@@ -90,9 +91,9 @@ export default function App() {
               <Route index element={<CustomerPanel />} />
               <Route path="customerpanel" element={<CustomerPanel />} />
               <Route path="customer-database" element={<CustomerData />} />
-              <Route path="daily-process" element={<DashboardContent />} />
+              <Route path="daily-process" element={<DailyProcesses />} />
               {/** Balance panel removed as per new requirements */}
-              <Route path="payments" element={<Payments />} />
+              <Route path="payments" element={<DailyProcesses />} />
             </Route>
 
             {/* Private route for courier */}

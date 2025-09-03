@@ -1,25 +1,36 @@
 import { useState, useContext, useEffect } from 'react';
 import { Plus, Package, Users, User, Phone, MapPin, DollarSign, Calendar, Droplets, Search, X, Edit, Trash2, Menu, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import { useOrders } from '../../contexts/OrdersContext';
-import { useCreateOrderMutation, useUpdateOrderMutation, useDeleteOrderMutation, useGetOrderByIdQuery } from '../../services/apiSlice';
+import { 
+  useCreateOrderMutation, 
+  useUpdateOrderMutation, 
+  useDeleteOrderMutation, 
+  useGetOrderByIdQuery,
+  useGetOrdersQuery,
+  useGetCustomersQuery,
+  useGetCouriersQuery,
+  useDeleteCustomerMutation
+} from '../../services/apiSlice';
 
 function CustomerPanel() {
-  const { getOrdersForDate, addOrderForDate, customers: ctxCustomers, ordersByDate } = useOrders();
+  const { getOrdersForDate, addOrderForDate, removeOrderForDate, customers: ctxCustomers, ordersByDate } = useOrders();
   const todayStr = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(todayStr);
+  
+  // Local state for deleted customers and orders
+  const [deletedCustomerIds, setDeletedCustomerIds] = useState(new Set());
+  const [deletedOrderIds, setDeletedOrderIds] = useState(new Set());
   
   // API hooks for order management
   const [createOrder, { isLoading: isCreatingOrder }] = useCreateOrderMutation();
   const [updateOrder, { isLoading: isUpdatingOrder }] = useUpdateOrderMutation();
   const [deleteOrder, { isLoading: isDeletingOrder }] = useDeleteOrderMutation();
+  const [deleteCustomer, { isLoading: isDeletingCustomer }] = useDeleteCustomerMutation();
   
-  // State for orders from backend
-  const [backendOrders, setBackendOrders] = useState([]);
-  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
-  
-  // State for customers from backend
-  const [backendCustomers, setBackendCustomers] = useState([]);
-  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  // RTK Query hooks for data fetching
+  const { data: backendOrders = [], isLoading: isLoadingOrders, refetch: refetchOrders } = useGetOrdersQuery();
+  const { data: backendCustomers = [], isLoading: isLoadingCustomers, refetch: refetchCustomers } = useGetCustomersQuery();
+  const { data: backendCouriers = [], isLoading: isLoadingCouriers, refetch: refetchCouriers } = useGetCouriersQuery();
   
   // Combine context customers with backend customers
   // Backend müştərilərinin field adlarını düzəlt
@@ -37,7 +48,8 @@ function CustomerPanel() {
         lastName: customer.surname || '', // surname field-ını istifadə et
         phone: customer.phone || customer.phoneNumber || '',
         address: customer.address || '',
-        pricePerBidon: customer.pricePerBidon || 5
+        pricePerBidon: customer.pricePerBidon || 5,
+        isDeleted: customer.status === 0 || customer.isDeleted || customer.deleted || false
       };
       return normalized;
     } else if (customer.fullName) {
@@ -72,45 +84,15 @@ function CustomerPanel() {
   
   // Fallback demo customers if no customers exist
   const allCustomers = customers.length > 0 ? customers : [
-    { id: 1, firstName: 'Əli', lastName: 'Məmmədov', phone: '+994501234567', address: 'Yasamal rayonu', pricePerBidon: 5 },
-    { id: 2, firstName: 'Ayşə', lastName: 'Həsənova', phone: '+994551234567', address: 'Nizami rayonu', pricePerBidon: 6 }
+    { id: 1, firstName: 'Əli', lastName: 'Məmmədov', phone: '+994501234567', address: 'Yasamal rayonu', pricePerBidon: 5, isDeleted: false },
+    { id: 2, firstName: 'Ayşə', lastName: 'Həsənova', phone: '+994551234567', address: 'Nizami rayonu', pricePerBidon: 6, isDeleted: false }
   ];
   
   // Use allCustomers for customer operations
   const customersForOperations = allCustomers;
-  
 
-
-  // Combine backend orders with local context orders
-  const allOrders = [...backendOrders, ...Object.values(ordersByDate).flat()];
-  const ordersForDate = allOrders.filter(order => {
-    // Backend orders use orderDate, local orders use date
-    const orderDate = order.orderDate || order.date;
-    return orderDate === selectedDate;
-  });
-
-  const testCouriers = [
-    { id: 1, name: 'Əli Məmmədov', phone: '+994501234567', vehicle: 'Motosiklet' },
-    { id: 2, name: 'Nicat Həsənov', phone: '+994551234567', vehicle: 'Avtomobil' }
-  ];
-
-  const [showOrderModal, setShowOrderModal] = useState(false);
-  const [editingOrder, setEditingOrder] = useState(null);
-  const [newOrder, setNewOrder] = useState({
-    customerId: '',
-    date: '',
-    bidonOrdered: '',
-    courierId: '',
-  });
-
-  const [customerSearch, setCustomerSearch] = useState('');
-  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
-  const [selectedCustomerName, setSelectedCustomerName] = useState('');
-  const [courierSearch, setCourierSearch] = useState('');
-  const [showCourierDropdown, setShowCourierDropdown] = useState(false);
-  const [selectedCourierName, setSelectedCourierName] = useState('');
-  const [orderSearchTerm, setOrderSearchTerm] = useState('');
-  const [orderStatusFilter, setOrderStatusFilter] = useState('all');
+  // Use only backend couriers - no static fallbacks
+  const allCouriers = backendCouriers;
 
   const getCustomer = (id) => {
     // Əvvəlcə customersForOperations-də ara
@@ -143,104 +125,138 @@ function CustomerPanel() {
     return customer;
   };
   
-  const getCourier = (id) => testCouriers.find(c => c.id === Number(id));
+  const getCourier = (id) => {
+    // Əvvəlcə backend kuryerlərində ara
+    let courier = allCouriers.find(c => c.id === Number(id));
+    
+    // Əgər tapılmadısa, fallback kuryerlərdə ara
+    if (!courier) {
+      courier = allCouriers.find(c => c.id === id);
+    }
+    
+    return courier;
+  };
+
+  // Tarix formatını düzəldən helper funksiya
+  const normalizeDate = (dateString) => {
+    if (!dateString) return '';
+    
+    // Əgər backend tarix / ilə ayrılmışdırsa (dd/MM/yyyy)
+    if (dateString.includes('/')) {
+      const [day, month, year] = dateString.split('/');
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    
+    // Əgər backend tarix - ilə ayrılmışdırsa (yyyy-MM-dd)
+    if (dateString.includes('-')) {
+      return dateString;
+    }
+    
+    return dateString;
+  };
+
+  // Backend artıq customerFullName və courierFullName qaytarır, 
+  // əlavə məlumat əlavə etməyə ehtiyac yoxdur
+  const enrichedBackendOrders = backendOrders.map(order => {
+    return {
+      ...order,
+      normalizedOrderDate: normalizeDate(order.orderDate) // Normalized tarix əlavə et
+    };
+  });
   
-  // Fetch orders from backend
-  const fetchOrdersFromBackend = async () => {
+  // Yalnız backend sifarişləri istifadə et
+  const allOrders = enrichedBackendOrders;
+  const ordersForDate = allOrders.filter(order => {
+    // Normalized tarix ilə müqayisə et
+    const orderDate = order.normalizedOrderDate;
+    return orderDate === selectedDate;
+  });
+
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(null);
+  const [newOrder, setNewOrder] = useState({
+    customerId: '',
+    date: '',
+    bidonOrdered: '',
+    courierId: '',
+  });
+
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [selectedCustomerName, setSelectedCustomerName] = useState('');
+  const [courierSearch, setCourierSearch] = useState('');
+  const [showCourierDropdown, setShowCourierDropdown] = useState(false);
+  const [selectedCourierName, setSelectedCourierName] = useState('');
+  const [orderSearchTerm, setOrderSearchTerm] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState('all');
+  const [customerStatusFilter, setCustomerStatusFilter] = useState('active'); // all, active, deleted - default active
+
+  // Delete customer function
+  const handleDeleteCustomer = async (customerId) => {
+    if (!confirm('Bu müştərini silmək istədiyinizə əminsiniz?')) {
+      return;
+    }
+
     try {
-      setIsLoadingOrders(true);
-      const response = await fetch('http://62.171.154.6:9090/orders/all');
-      if (response.ok) {
-        const data = await response.json();
+      // Backend müştəri ID-sini tap
+      let backendCustomerId = customerId;
+      
+      // Əgər frontend ID formatındadırsa (backend_123), backend ID-ni çıxar
+      if (typeof customerId === 'string' && customerId.startsWith('backend_')) {
+        backendCustomerId = customerId.replace('backend_', '');
+      }
+      
+      // Əgər originalId varsa, onu istifadə et
+      const customer = customersForOperations.find(c => c.id === customerId);
+      if (customer && customer.originalId) {
+        backendCustomerId = customer.originalId;
+      }
+
+      console.log('Deleting customer with ID:', customerId, 'Backend ID:', backendCustomerId);
+
+      const result = await deleteCustomer(backendCustomerId).unwrap();
+      
+      // Backend response-unu idarə et
+      if (result && result.success) {
+        // Müştəri siyahılarını yenilə
+        await refetchCustomers();
+        await refetchOrders(); // Sifarişləri də yenilə
         
-        // Debug: Log the first order to see its structure
-        if (data.length > 0) {
-          console.log('First backend order structure:', data[0]);
-          console.log('Available fields:', Object.keys(data[0]));
-          
-          // Check if orders have unique identifiers
-          const uniqueIdentifiers = data.map((order, index) => ({
-            index,
-            customerFullName: order.customerFullName,
-            customerPhoneNumber: order.customerPhoneNumber,
-            orderDate: order.orderDate,
-            price: order.price,
-            carboyCount: order.carboyCount,
-            courierFullName: order.courierFullName,
-            orderStatus: order.orderStatus
-          }));
-          
-          console.log('Orders with potential unique identifiers:', uniqueIdentifiers);
-        }
-        
-        // Backend sifarişlərinə müştəri məlumatlarını əlavə et
-        const enrichedOrders = data.map((order, index) => {
-          const customer = getCustomer(order.customerId);
-          const courier = getCourier(order.courierId);
-          
-          return {
-            ...order,
-            // TEMPORARY SOLUTION: Backend API doesn't provide order IDs
-            // This is a critical issue that needs to be fixed by the backend developer
-            // The /orders/all endpoint should return orders with an 'id' field
-            tempId: index + 1,
-            customerFullName: customer ? `${customer.firstName} ${customer.lastName}` : 'Naməlum Müştəri',
-            customerPhoneNumber: customer?.phone || '',
-            customerAddress: customer?.address || '',
-            courierFullName: courier?.name || 'Təyin olunmayıb'
-          };
-        });
-        
-        setBackendOrders(enrichedOrders);
-      } else {
-        console.error('Failed to fetch orders:', response.status);
-        setBackendOrders([]);
+        alert(result.message);
       }
     } catch (error) {
-      console.error('Error fetching orders:', error);
-      setBackendOrders([]);
-    } finally {
-      setIsLoadingOrders(false);
+      console.error('Error deleting customer:', error);
+      alert('Müştəri silinərkən xəta baş verdi. Zəhmət olmasa yenidən cəhd edin.');
     }
   };
-  
-  // Fetch customers from backend
-  const fetchCustomersFromBackend = async () => {
-    try {
-      setIsLoadingCustomers(true);
-      const response = await fetch('http://62.171.154.6:9090/customers/all');
-      if (response.ok) {
-        const data = await response.json();
-        setBackendCustomers(data);
-      } else {
-        console.error('Failed to fetch customers:', response.status);
-        setBackendCustomers([]);
-      }
-    } catch (error) {
-      console.error('Error fetching customers:', error);
-      setBackendCustomers([]);
-    } finally {
-      setIsLoadingCustomers(false);
-    }
-  };
-  
+
   // Load data on component mount
   useEffect(() => {
-    fetchOrdersFromBackend();
-    fetchCustomersFromBackend();
+    // RTK Query automatically handles data fetching
+    // No need for manual fetch calls
   }, []);
 
   const filteredCustomers = customersForOperations.filter(customer => {
+    // Boş və undefined müştəriləri filtrlə
+    if (!customer || !customer.firstName || !customer.lastName) {
+      return false;
+    }
+    
     const fullName = `${customer.firstName} ${customer.lastName}`.toLowerCase();
     const phone = customer.phone ? customer.phone.toLowerCase() : '';
     const address = customer.address ? customer.address.toLowerCase() : '';
     const searchTerm = customerSearch.toLowerCase();
     
+    // Status filter - default olaraq yalnız aktiv müştəriləri göstər
+    if (customerStatusFilter === 'active' && customer.isDeleted) return false;
+    if (customerStatusFilter === 'deleted' && !customer.isDeleted) return false;
+    
     return fullName.includes(searchTerm) || phone.includes(searchTerm) || address.includes(searchTerm);
   });
 
-  const filteredCouriers = testCouriers.filter(courier => {
-    const name = courier.name.toLowerCase();
+  const filteredCouriers = allCouriers.filter(courier => {
+    // Backend kuryer məlumatları üçün fərqli field adları
+    const name = (courier.name || courier.fullName || (courier.firstName + ' ' + courier.lastName) || '').toLowerCase();
     const phone = courier.phone ? courier.phone.toLowerCase() : '';
     const vehicle = courier.vehicle ? courier.vehicle.toLowerCase() : '';
     const searchTerm = courierSearch.toLowerCase();
@@ -338,7 +354,9 @@ function CustomerPanel() {
 
   const handleCourierSelect = (courier) => {
     setNewOrder(prev => ({ ...prev, courierId: courier.id }));
-    setSelectedCourierName(courier.name);
+    // Backend kuryer məlumatları üçün fərqli field adları
+    const courierName = courier.name || courier.fullName || courier.firstName + ' ' + courier.lastName || 'Naməlum Kuryer';
+    setSelectedCourierName(courierName);
     setCourierSearch('');
     setShowCourierDropdown(false);
   };
@@ -367,14 +385,29 @@ function CustomerPanel() {
 
     try {
       // Backend Swagger-ə uyğun data structure  
-      // Problem: orderDate field-ı LocalDate parsing xətası yaradır
-      // Həll: orderDate göndərməyək, backend avtomatik null təyin edir
+      // orderDate field-ını düzgün formatda göndər (dd/MM/yyyy)
+      const formatDateForBackend = (dateString) => {
+        const date = new Date(dateString);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+      };
+
+      // Real vaxtı formatla (HH:mm) - backend Swagger-ə uyğun
+      const formatTimeForBackend = () => {
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        return `${hours}:${minutes}`;
+      };
+
       const backendOrderData = {
         customerId: Number(customerId),
         courierId: Number(courierId),
         carboyCount: Number(bidonOrdered), // bidonOrdered əvəzinə carboyCount
-        // orderDate: date, // Bu field problemi yaradır, backend null qəbul edir
-        // orderTime: new Date().toTimeString().split(' ')[0] // Bu da lazım deyil
+        orderDate: formatDateForBackend(date), // Seçilən tarixi düzgün formatda göndər
+        orderTime: formatTimeForBackend() // Real vaxtı əlavə et
       };
       
 
@@ -384,24 +417,13 @@ function CustomerPanel() {
         await updateOrder({ id: editingOrder.id, ...backendOrderData }).unwrap();
         alert('Sifariş uğurla yeniləndi!');
       } else {
-        // Create new order
+        // Create new order - tamamilə backend-də yaradılır
         const result = await createOrder(backendOrderData).unwrap();
-        
-        // Also add to local context for immediate UI update
-        addOrderForDate(selectedDate, {
-          customerId: Number(customerId),
-          courierId: Number(courierId),
-          bidonOrdered: Number(bidonOrdered), // Local context üçün orijinal field adı
-          id: result.id || Date.now(),
-          date: date,
-          completed: false,
-          paymentMethod: ''
-        });
         alert('Sifariş uğurla əlavə edildi!');
       }
 
       // Refresh orders from backend
-      await fetchOrdersFromBackend();
+      await refetchOrders();
 
       setNewOrder({ customerId: '', date: '', bidonOrdered: '', courierId: '' });
       setSelectedCustomerName('');
@@ -456,7 +478,7 @@ function CustomerPanel() {
       };
       
       await updateOrder({ id: orderId, ...backendUpdates }).unwrap();
-      await fetchOrdersFromBackend();
+      await refetchOrders();
       alert('Sifariş uğurla yeniləndi!');
     } catch (error) {
       console.error('Error updating order:', error);
@@ -469,41 +491,61 @@ function CustomerPanel() {
       return;
     }
 
-    // Debug: Log the order ID being passed
-    console.log('Attempting to delete order with ID:', orderId);
-    console.log('Order ID type:', typeof orderId);
-    console.log('Order ID value:', orderId);
-
-    // Check if this is a temporary ID (backend issue)
-    if (typeof orderId === 'number' && orderId <= 100) {
-      alert('⚠️ Bu müvəqqəti ID-dir. Backend API-də sifarişlər ID sahəsi olmadan qaytarılır. Backend developer ilə əlaqə saxlayın.');
-      console.error('Backend API issue: Orders returned without ID field');
-      return;
-    }
-
-    // Check if orderId is undefined (backend doesn't provide ID)
-    if (orderId === undefined || orderId === null) {
-      alert('❌ Sifariş ID-si tapılmadı. Backend API-də problem var.');
-      console.error('Order ID is undefined - backend API issue');
-      return;
-    }
-
     try {
-      await deleteOrder(orderId).unwrap();
-      await fetchOrdersFromBackend();
-      alert('Sifariş uğurla silindi!');
+      // Bütün sifarişlər backend-dən gəlməlidir
+      console.log('Deleting order from backend with ID:', orderId);
+      const result = await deleteOrder(orderId).unwrap();
+      await refetchOrders();
+      
+      // Optimistic update - UI-da dərhal status-u dəyişdir
+      if (result && result.success) {
+        // Local state-də silinmiş sifariş ID-sini əlavə et
+        setDeletedOrderIds(prev => new Set([...prev, orderId]));
+        
+        alert(result.message);
+      } else {
+        alert('Sifariş uğurla ləğv edildi!');
+      }
     } catch (error) {
       console.error('Error deleting order:', error);
-      alert('Sifariş silinərkən xəta baş verdi. Zəhmət olmasa yenidən cəhd edin.');
+      
+      // Daha detallı xəta mesajı
+      if (error.status === 404) {
+        alert('Sifariş tapılmadı! Bu sifariş artıq silinib və ya mövcud deyil.');
+      } else if (error.status === 401) {
+        alert('Giriş tələb olunur! Zəhmət olmasa yenidən giriş edin.');
+      } else if (error.status === 403) {
+        alert('Bu əməliyyat üçün icazəniz yoxdur!');
+      } else {
+        alert(`Sifariş silinərkən xəta baş verdi (${error.status}). Zəhmət olmasa yenidən cəhd edin.`);
+      }
     }
   };
 
   const openEditOrderModal = (order) => {
+    // Backend tarix formatını frontend formatına çevir
+    const formatDateForFrontend = (backendDate) => {
+      if (!backendDate) return '';
+      
+      // Əgər backend tarix / ilə ayrılmışdırsa (dd/MM/yyyy)
+      if (backendDate.includes('/')) {
+        const [day, month, year] = backendDate.split('/');
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      }
+      
+      // Əgər backend tarix - ilə ayrılmışdırsa (yyyy-MM-dd)
+      if (backendDate.includes('-')) {
+        return backendDate;
+      }
+      
+      return backendDate;
+    };
+
     setEditingOrder(order);
     setNewOrder({
       customerId: order.customerId,
-      date: order.orderDate || order.date,
-      bidonOrdered: order.bidonOrdered,
+      date: formatDateForFrontend(order.orderDate || order.date),
+      bidonOrdered: order.carboyCount || order.bidonOrdered, // Backend carboyCount field-ını istifadə et
       courierId: order.courierId,
     });
     setSelectedCustomerName(() => {
@@ -541,18 +583,38 @@ function CustomerPanel() {
           }
         `}
       </style>
-      {/* Backend API Warning */}
-      <div style={{
-        background: '#fef3c7',
-        border: '1px solid #fde68a',
-        color: '#92400e',
-        padding: '0.75rem 1rem',
-        textAlign: 'center',
-        fontSize: '0.9rem',
-        fontWeight: '500'
-      }}>
-        ⚠️ Backend API problemi: Sifarişlər ID sahəsi olmadan qaytarılır. Silmə və redaktə funksiyaları işləməyəcək. Backend developer ilə əlaqə saxlayın.
-      </div>
+
+
+      {/* Backend API Status Messages */}
+     
+      
+      {isLoadingCouriers && (
+        <div style={{
+          background: '#3b82f6',
+          border: '1px solid #60a5fa',
+          color: '#ffffff',
+          padding: '0.75rem 1rem',
+          textAlign: 'center',
+          fontSize: '0.9rem',
+          fontWeight: '500'
+        }}>
+        🔄 Kuryerlər yüklənir... Zəhmət olmasa gözləyin.
+        </div>
+      )}
+      
+      {!isLoadingCouriers && backendCouriers.length === 0 && (
+        <div style={{
+          background: '#ef4444',
+          border: '1px solid #fca5a5',
+          color: '#ffffff',
+          padding: '0.75rem 1rem',
+          textAlign: 'center',
+          fontSize: '0.9rem',
+          fontWeight: '500'
+        }}>
+        ❌ Kuryerlər yüklənmədi! Sifariş əlavə etmək üçün kuryerlər lazımdır.
+        </div>
+      )}
 
       {/* Mobile Header */}
       <div style={{ 
@@ -618,10 +680,13 @@ function CustomerPanel() {
       <div style={{ padding: '1rem', display: 'flex', gap: '1rem' }}>
         <button
           onClick={openOrderModal}
+          disabled={isLoadingCouriers || backendCouriers.length === 0}
           style={{
             flex: 1,
             padding: '1rem',
-            background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+            background: isLoadingCouriers || backendCouriers.length === 0 
+              ? '#9ca3af' 
+              : 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
             color: 'white',
             border: 'none',
             borderRadius: '12px',
@@ -631,18 +696,22 @@ function CustomerPanel() {
             alignItems: 'center',
             justifyContent: 'center',
             gap: '0.5rem',
-            cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(22,163,74,0.3)'
+            cursor: isLoadingCouriers || backendCouriers.length === 0 ? 'not-allowed' : 'pointer',
+            boxShadow: isLoadingCouriers || backendCouriers.length === 0 
+              ? 'none' 
+              : '0 4px 12px rgba(22,163,74,0.3)',
+            opacity: isLoadingCouriers || backendCouriers.length === 0 ? 0.6 : 1
           }}
+                      title={isLoadingCouriers ? 'Kuryerlər yüklənir...' : backendCouriers.length === 0 ? 'Kuryerlər yüklənmədi! Sifariş əlavə etmək üçün kuryerlər lazımdır.' : 'Yeni sifariş əlavə et'}
         >
           <Plus size={20} />
-          Yeni Sifariş
+          {isLoadingCouriers ? 'Kuryerlər Yüklənir...' : backendCouriers.length === 0 ? 'Kuryerlər Yoxdur' : 'Yeni Sifariş'}
         </button>
         
         <button
           onClick={() => {
-            fetchOrdersFromBackend();
-            fetchCustomersFromBackend();
+            refetchOrders();
+            refetchCustomers();
           }}
           disabled={isLoadingOrders || isLoadingCustomers}
           style={{
@@ -747,17 +816,50 @@ function CustomerPanel() {
                     Sifariş əlavə etmək üçün əvvəlcə müştəri əlavə edin
                   </p>
                 </div>
+              ) : isLoadingCouriers ? (
+                <div style={{ 
+                  padding: '2rem', 
+                  textAlign: 'center', 
+                  color: '#3b82f6',
+                  border: '2px dashed #60a5fa',
+                  borderRadius: '12px',
+                  background: '#eff6ff'
+                }}>
+                  <Loader2 size={48} className="animate-spin" style={{ marginBottom: '1rem', color: '#60a5fa' }} />
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: '600', margin: '0 0 0.5rem 0' }}>
+                    Kuryerlər Yüklənir...
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.9rem' }}>
+                    Zəhmət olmasa gözləyin
+                  </p>
+                </div>
+              ) : backendCouriers.length === 0 ? (
+                <div style={{ 
+                  padding: '2rem', 
+                  textAlign: 'center', 
+                  color: '#dc2626',
+                  border: '2px dashed #fca5a5',
+                  borderRadius: '12px',
+                  background: '#fef2f2'
+                }}>
+                  <Package size={48} style={{ marginBottom: '1rem', color: '#fca5a5' }} />
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: '600', margin: '0 0 0.5rem 0' }}>
+                    Kuryerlər Yüklənir...
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.9rem' }}>
+                    Kuryerlər yüklənəndə sifariş əlavə edə biləcəksiniz
+                  </p>
+                </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   {/* Müştəri Seçimi */}
                   <div style={{ position: 'relative' }}>
                     <label style={{ 
-                      display: 'block', 
+                      display: 'flex',
                       marginBottom: '0.5rem', 
                       fontWeight: '600', 
                       color: '#374151', 
                       fontSize: '0.9rem',
-                      display: 'flex',
                       alignItems: 'center',
                       gap: '0.5rem'
                     }}>
@@ -853,11 +955,33 @@ function CustomerPanel() {
                                 onMouseOver={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
                                 onMouseOut={e => e.currentTarget.style.backgroundColor = 'white'}
                               >
-                                <div style={{ fontWeight: '600', color: '#374151', marginBottom: '0.25rem' }}>
-                                  {customer.firstName} {customer.lastName}
-                                </div>
-                                <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-                                  {customer.phone}
+                                <div style={{ 
+                                  display: 'flex', 
+                                  justifyContent: 'space-between', 
+                                  alignItems: 'center',
+                                  width: '100%'
+                                }}>
+                                  <div>
+                                    <div style={{ fontWeight: '600', color: '#374151', marginBottom: '0.25rem' }}>
+                                      {customer.firstName} {customer.lastName}
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+                                      {customer.phone}
+                                    </div>
+                                    <div style={{ marginTop: '0.25rem' }}>
+                                      <span style={{
+                                        padding: '2px 6px',
+                                        borderRadius: '4px',
+                                        fontSize: '10px',
+                                        fontWeight: '600',
+                                        background: customer.isDeleted ? '#fee2e2' : '#d1fae5',
+                                        color: customer.isDeleted ? '#dc2626' : '#065f46',
+                                        border: `1px solid ${customer.isDeleted ? '#fca5a5' : '#a7f3d0'}`
+                                      }}>
+                                        {customer.isDeleted ? 'Silindi' : 'Aktiv'}
+                                      </span>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             ))}
@@ -870,12 +994,11 @@ function CustomerPanel() {
                   {/* Tarix */}
                   <div>
                     <label style={{ 
-                      display: 'block', 
+                      display: 'flex',
                       marginBottom: '0.5rem', 
                       fontWeight: '600', 
                       color: '#374151', 
                       fontSize: '0.9rem',
-                      display: 'flex',
                       alignItems: 'center',
                       gap: '0.5rem'
                     }}>
@@ -902,12 +1025,11 @@ function CustomerPanel() {
                   {/* Bidon Sayı */}
                   <div>
                     <label style={{ 
-                      display: 'block', 
+                      display: 'flex',
                       marginBottom: '0.5rem', 
                       fontWeight: '600', 
                       color: '#374151', 
                       fontSize: '0.9rem',
-                      display: 'flex',
                       alignItems: 'center',
                       gap: '0.5rem'
                     }}>
@@ -936,12 +1058,11 @@ function CustomerPanel() {
                   {/* Kuryer Seçimi */}
                   <div style={{ position: 'relative' }}>
                     <label style={{ 
-                      display: 'block', 
+                      display: 'flex',
                       marginBottom: '0.5rem', 
                       fontWeight: '600', 
                       color: '#374151', 
                       fontSize: '0.9rem',
-                      display: 'flex',
                       alignItems: 'center',
                       gap: '0.5rem'
                     }}>
@@ -1038,10 +1159,10 @@ function CustomerPanel() {
                                 onMouseOut={e => e.currentTarget.style.backgroundColor = 'white'}
                               >
                                 <div style={{ fontWeight: '600', color: '#374151', marginBottom: '0.25rem' }}>
-                                  {courier.name}
+                                  {courier.name || courier.fullName || 'Naməlum Kuryer'}
                                 </div>
                                 <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-                                  {courier.vehicle}
+                                  {courier.vehicle || courier.phone || 'Məlumat yoxdur'}
                                 </div>
                               </div>
                             ))}
@@ -1054,12 +1175,11 @@ function CustomerPanel() {
                   {/* Məbləğ Göstərilməsi */}
                   <div>
                     <label style={{ 
-                      display: 'block', 
+                      display: 'flex',
                       marginBottom: '0.5rem', 
                       fontWeight: '600', 
                       color: '#374151', 
                       fontSize: '0.9rem',
-                      display: 'flex',
                       alignItems: 'center',
                       gap: '0.5rem'
                     }}>
@@ -1316,8 +1436,8 @@ function CustomerPanel() {
             
             <button
               onClick={() => {
-                fetchOrdersFromBackend();
-                fetchCustomersFromBackend();
+                refetchOrders();
+                refetchCustomers();
               }}
               disabled={isLoadingOrders || isLoadingCustomers}
               style={{
@@ -1377,6 +1497,7 @@ function CustomerPanel() {
                 <thead>
                   <tr style={{ background: 'linear-gradient(135deg, #dbeafe 0%, #c7d2fe 100%)' }}>
                     <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Tarix</th>
+                    <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Vaxt</th>
                     <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Müştəri</th>
                     <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Kuryer</th>
                     <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 'bold', color: '#1f2937', borderBottom: '2px solid #3b82f6' }}>Bidon</th>
@@ -1389,49 +1510,49 @@ function CustomerPanel() {
                 <tbody>
                   {sortedDates.map(date => (
                     groupedOrders[date].map((order) => {
-                      // Handle both backend and local order data
-                      let customer, courier, amount, bidonCount, orderStatus;
+                      // Backend sifarişləri üçün məlumatları birbaşa istifadə et
+                      const customerFullName = order.customerFullName || 'Naməlum Müştəri';
+                      const courierFullName = order.courierFullName || 'Təyin olunmayıb';
+                      const amount = order.price || 0;
+                      const bidonCount = order.carboyCount || 0;
                       
-                      if (order.customerFullName && order.customerFullName !== 'undefined undefined') {
-                        // Backend order - customer info is embedded
-                        customer = {
-                          firstName: order.customerFullName.split(' ')[0] || '',
-                          lastName: order.customerFullName.split(' ').slice(1).join(' ') || '',
-                          phone: order.customerPhoneNumber || '',
-                          address: order.customerAddress || '',
-                          pricePerBidon: order.price / order.carboyCount || 5
-                        };
-                        courier = { name: order.courierFullName || '—' };
-                        amount = order.price || 0;
-                        bidonCount = order.carboyCount || 0;
-                        orderStatus = order.orderStatus === 'PENDING' ? false : true; // PENDING = false (not completed)
-                      } else {
-                        // Backend order without customerFullName or local order - get from context
-                        customer = getCustomer(order.customerId);
-                        courier = getCourier(order.courierId);
-                        
-                        if (order.price && order.carboyCount) {
-                          // Backend order
-                          amount = order.price || 0;
-                          bidonCount = order.carboyCount || 0;
-                          orderStatus = order.orderStatus === 'PENDING' ? false : true;
-                        } else {
-                          // Local order
-                          amount = (order.bidonOrdered || 0) * (customer?.pricePerBidon ?? 5);
-                          bidonCount = order.bidonOrdered || 0;
-                          orderStatus = order.completed || false;
+                      // Status məntiqini düzəld - kuryer tərəfindən idarə edilir
+                      const getStatusInfo = (orderStatus, orderId) => {
+                        // Əgər local state-də silinmişdirsə
+                        if (deletedOrderIds.has(orderId)) {
+                          return { text: 'Ləğv edildi', color: '#dc2626', bgColor: '#fee2e2', borderColor: '#fca5a5' };
                         }
-                      }
+                        
+                        switch (orderStatus) {
+                          case 'PENDING':
+                            return { text: 'Gözləyir', color: '#92400e', bgColor: '#fef3c7', borderColor: '#fde68a' };
+                          case 'COMPLETED':
+                            return { text: 'Tamamlandı', color: '#065f46', bgColor: '#d1fae5', borderColor: '#a7f3d0' };
+                          case 'REJECTED':
+                            return { text: 'Ləğv edildi', color: '#dc2626', bgColor: '#fee2e2', borderColor: '#fca5a5' };
+                          case 'IN_PROGRESS':
+                            return { text: 'Çatdırılır', color: '#1d4ed8', bgColor: '#dbeafe', borderColor: '#93c5fd' };
+                          case 'DELETED':
+                            return { text: 'Ləğv edildi', color: '#dc2626', bgColor: '#fee2e2', borderColor: '#fca5a5' };
+                          default:
+                            return { text: 'Gözləyir', color: '#92400e', bgColor: '#fef3c7', borderColor: '#fde68a' };
+                        }
+                      };
+                      
+                      const statusInfo = getStatusInfo(order.orderStatus, order.id);
                       
                       return (
-                        <tr key={order.tempId || order.id || `order-${index}`}>
+                        <tr key={order.id}>
                           <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{date}</td>
-                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{customer ? `${customer.firstName} ${customer.lastName}` : 'Naməlum'}</td>
-                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{courier ? courier.name : '—'}</td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', fontSize: '0.875rem', color: '#6b7280' }}>
+                            {order.orderTime || '—'}
+                          </td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{customerFullName}</td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{courierFullName}</td>
                           <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{bidonCount}</td>
                           <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', color: '#16a34a', fontWeight: 700 }}>{amount} AZN</td>
                           <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
-                            {orderStatus && order.paymentMethod ? (order.paymentMethod === 'cash' ? 'Nağd' : order.paymentMethod === 'card' ? 'Kart' : order.paymentMethod === 'credit' ? 'Nəsiyə' : '—') : '—'}
+                            {order.paymentMethod ? (order.paymentMethod === 'cash' ? 'Nağd' : order.paymentMethod === 'card' ? 'Kart' : order.paymentMethod === 'credit' ? 'Nəsiyə' : '—') : '—'}
                           </td>
                           <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
                             <span style={{
@@ -1439,11 +1560,11 @@ function CustomerPanel() {
                               borderRadius: '9999px',
                               fontSize: '12px',
                               fontWeight: 600,
-                              background: orderStatus ? '#d1fae5' : '#fef3c7',
-                              color: orderStatus ? '#065f46' : '#92400e',
-                              border: `1px solid ${orderStatus ? '#a7f3d0' : '#fde68a'}`
+                              background: statusInfo.bgColor,
+                              color: statusInfo.color,
+                              border: `1px solid ${statusInfo.borderColor}`
                             }}>
-                              {orderStatus ? 'Tamamlandı' : 'Gözləyir'}
+                              {statusInfo.text}
                             </span>
                           </td>
                           <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
@@ -1455,14 +1576,7 @@ function CustomerPanel() {
                                 Redaktə
                               </button>
                               <button
-                                onClick={() => {
-                                  console.log('Order object being deleted:', order);
-                                  console.log('Order ID field:', order.id);
-                                  console.log('Order tempId field:', order.tempId);
-                                  // Use tempId if id is not available
-                                  const orderIdToDelete = order.id || order.tempId;
-                                  handleDeleteOrder(orderIdToDelete);
-                                }}
+                                onClick={() => handleDeleteOrder(order.id)}
                                 style={{ background: '#ef4444', color: 'white', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '500' }}
                               >
                                 Sil
@@ -1505,39 +1619,29 @@ function CustomerPanel() {
 
               {/* Orders for this date */}
               {groupedOrders[date].map((order, index) => {
-                // Handle both backend and local order data
-                let customer, courier, bidonCount, amount, orderStatus;
+                // Backend sifarişləri üçün məlumatları birbaşa istifadə et
+                const customerFullName = order.customerFullName || 'Naməlum Müştəri';
+                const courierFullName = order.courierFullName || 'Təyin olunmayıb';
+                const bidonCount = order.carboyCount || 0;
+                const amount = order.price || 0;
                 
-                if (order.customerFullName && order.customerFullName !== 'undefined undefined') {
-                  // Backend order - customer info is embedded
-                  customer = {
-                    firstName: order.customerFullName.split(' ')[0] || '',
-                    lastName: order.customerFullName.split(' ').slice(1).join(' ') || '',
-                    phone: order.customerPhoneNumber || '',
-                    address: order.customerAddress || '',
-                    pricePerBidon: order.price / order.carboyCount || 5
-                  };
-                  courier = { name: order.courierFullName || '—' };
-                  bidonCount = order.carboyCount || 0;
-                  amount = order.price || 0;
-                  orderStatus = order.orderStatus === 'PENDING' ? false : true;
-                } else {
-                  // Backend order without customerFullName or local order - get from context
-                  customer = getCustomer(order.customerId);
-                  courier = getCourier(order.courierId);
-                  
-                  if (order.price && order.carboyCount) {
-                    // Backend order
-                    bidonCount = order.carboyCount || 0;
-                    amount = order.price || 0;
-                    orderStatus = order.orderStatus === 'PENDING' ? false : true;
-                  } else {
-                    // Local order
-                    bidonCount = order.bidonOrdered || 0;
-                    amount = bidonCount * (customer?.pricePerBidon ?? 5);
-                    orderStatus = order.completed || false;
+                // Status məntiqini düzəld - kuryer tərəfindən idarə edilir
+                const getStatusInfo = (orderStatus) => {
+                  switch (orderStatus) {
+                    case 'PENDING':
+                      return { text: 'Gözləyir', color: '#92400e', bgColor: '#fef3c7', borderColor: '#fde68a' };
+                    case 'COMPLETED':
+                      return { text: 'Tamamlandı', color: '#065f46', bgColor: '#d1fae5', borderColor: '#a7f3d0' };
+                    case 'REJECTED':
+                      return { text: 'Ləğv edildi', color: '#dc2626', bgColor: '#fee2e2', borderColor: '#fca5a5' };
+                    case 'IN_PROGRESS':
+                      return { text: 'Çatdırılır', color: '#1d4ed8', bgColor: '#dbeafe', borderColor: '#93c5fd' };
+                    default:
+                      return { text: 'Gözləyir', color: '#92400e', bgColor: '#fef3c7', borderColor: '#fde68a' };
                   }
-                }
+                };
+                
+                const statusInfo = getStatusInfo(order.orderStatus);
                 
                 const isLast = index === groupedOrders[date].length - 1;
                 
@@ -1568,14 +1672,21 @@ function CustomerPanel() {
                           fontWeight: '600', 
                           color: '#1f2937'
                         }}>
-                          {customer ? `${customer.firstName} ${customer.lastName}` : 'Naməlum Müştəri'}
+                          {customerFullName}
                         </h4>
                         <p style={{ 
                           margin: '0.25rem 0 0 0', 
                           fontSize: '0.85rem', 
                           color: '#6b7280' 
                         }}>
-                          Kuryer: {courier ? courier.name : 'Təyin olunmayıb'}
+                          Kuryer: {courierFullName}
+                        </p>
+                        <p style={{ 
+                          margin: '0.25rem 0 0 0', 
+                          fontSize: '0.8rem', 
+                          color: '#9ca3af' 
+                        }}>
+                          Vaxt: {order.orderTime || '—'}
                         </p>
                       </div>
                       
@@ -1584,12 +1695,12 @@ function CustomerPanel() {
                           borderRadius: '20px', 
                           fontSize: '0.75rem', 
                           fontWeight: '600',
-                          background: orderStatus ? '#d1fae5' : '#fef3c7',
-                          color: orderStatus ? '#065f46' : '#92400e',
-                          border: `1px solid ${orderStatus ? '#a7f3d0' : '#fde68a'}`,
+                          background: statusInfo.bgColor,
+                          color: statusInfo.color,
+                          border: `1px solid ${statusInfo.borderColor}`,
                           whiteSpace: 'nowrap'
                         }}>
-                          {orderStatus ? 'Tamamlandı' : 'Gözləyir'}
+                          {statusInfo.text}
                         </div>
                     </div>
 
@@ -1636,14 +1747,15 @@ function CustomerPanel() {
                     </div>
 
                     {/* Customer Info */}
-                    {customer && (
+                    {/* Customer Info */}
+                    {order.customerPhoneNumber && (
                       <div style={{ 
                         padding: '0.75rem',
                         background: '#fafafa',
                         borderRadius: '8px',
                         marginBottom: '1rem'
                       }}>
-                        {customer.phone && (
+                        {order.customerPhoneNumber && (
                           <div style={{ 
                             display: 'flex', 
                             alignItems: 'center', 
@@ -1652,11 +1764,11 @@ function CustomerPanel() {
                           }}>
                             <Phone size={14} style={{ color: '#6b7280' }} />
                             <span style={{ fontSize: '0.85rem', color: '#374151' }}>
-                              {customer.phone}
+                              {order.customerPhoneNumber}
                             </span>
                           </div>
                         )}
-                        {customer.address && (
+                        {order.customerAddress && (
                           <div style={{ 
                             display: 'flex', 
                             alignItems: 'center', 
@@ -1664,7 +1776,7 @@ function CustomerPanel() {
                           }}>
                             <MapPin size={14} style={{ color: '#6b7280' }} />
                             <span style={{ fontSize: '0.85rem', color: '#374151' }}>
-                              {customer.address}
+                              {order.customerAddress}
                             </span>
                           </div>
                         )}
@@ -1699,14 +1811,7 @@ function CustomerPanel() {
                         Redaktə
                       </button>
                       <button
-                        onClick={() => {
-                          console.log('Mobile - Order object being deleted:', order);
-                          console.log('Mobile - Order ID field:', order.id);
-                          console.log('Mobile - Order tempId field:', order.tempId);
-                          // Use tempId if id is not available
-                          const orderIdToDelete = order.id || order.tempId;
-                          handleDeleteOrder(orderIdToDelete);
-                        }}
+                        onClick={() => handleDeleteOrder(order.id)}
                         style={{
                           flex: 1,
                           padding: '0.75rem',

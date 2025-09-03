@@ -25,6 +25,7 @@ function CustomerData() {
   const [customerToDelete, setCustomerToDelete] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchType, setSearchType] = useState('general'); // general, phone, name
+  const [statusFilter, setStatusFilter] = useState('active'); // all, active, deleted - default active
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -43,8 +44,15 @@ function CustomerData() {
   const isNoCustomersError = error && error.status === 404;
   const hasActualError = error && error.status !== 404;
   
+  // Local state for deleted customers
+  const [deletedCustomerIds, setDeletedCustomerIds] = useState(new Set());
+  
   // Use actual customers if available, otherwise empty array
-  const displayCustomers = customers || [];
+  // Backend-dən gələn müştərilərə isDeleted field-ı əlavə et
+  const displayCustomers = (customers || []).map(customer => ({
+    ...customer,
+    isDeleted: customer.isDeleted || customer.deleted || false
+  }));
   const [createCustomer, { isLoading: isCreating }] = useCreateCustomerMutation();
   const [updateCustomer, { isLoading: isUpdating }] = useUpdateCustomerMutation();
   const [deleteCustomer, { isLoading: isDeleting }] = useDeleteCustomerMutation();
@@ -90,11 +98,17 @@ function CustomerData() {
     if (!customerToDelete) return;
     
     try {
-      await deleteCustomer(customerToDelete.id).unwrap();
-      refetch();
-      toast.success('Müştəri uğurla silindi!');
-      setDeleteModalOpen(false);
-      setCustomerToDelete(null);
+      const result = await deleteCustomer(customerToDelete.id).unwrap();
+      
+      // Backend response-unu idarə et
+      if (result && result.success) {
+        // Cache-i manual yenilə
+        refetch();
+        
+        toast.success(result.message);
+        setDeleteModalOpen(false);
+        setCustomerToDelete(null);
+      }
     } catch (error) {
       console.error('Delete error:', error);
       toast.error('Müştəri silinərkən xəta baş verdi: ' + (error.data?.message || error.message));
@@ -273,21 +287,39 @@ function CustomerData() {
     }
   };
 
-  // Filtered customers based on search
+  // Filtered customers based on search and status
   const getFilteredCustomers = () => {
-    if (!searchTerm) return displayCustomers;
+    let filtered = displayCustomers;
+
+    // Status filter
+    if (statusFilter === 'active') {
+      filtered = filtered.filter(customer => !customer.isDeleted);
+    } else if (statusFilter === 'deleted') {
+      filtered = filtered.filter(customer => customer.isDeleted);
+    }
+
+    // Search filter
+    if (!searchTerm) return filtered;
 
     // Əgər search type phone və ya name-dirsə, API search istifadə et
     if (searchType === 'phone' && phoneSearchResults.length > 0) {
-      return phoneSearchResults;
+      return phoneSearchResults.filter(customer => {
+        if (statusFilter === 'active') return !customer.isDeleted;
+        if (statusFilter === 'deleted') return customer.isDeleted;
+        return true;
+      });
     }
     
     if (searchType === 'name' && nameSearchResults.length > 0) {
-      return nameSearchResults;
+      return nameSearchResults.filter(customer => {
+        if (statusFilter === 'active') return !customer.isDeleted;
+        if (statusFilter === 'deleted') return customer.isDeleted;
+        return true;
+      });
     }
 
     // Əks halda local filter istifadə et
-    return displayCustomers.filter(customer => {
+    return filtered.filter(customer => {
       const search = searchTerm.toLowerCase().trim();
       const fullName = `${customer.name || customer.firstName || ""} ${customer.surname || customer.lastName || ""}`.toLowerCase();
       return (
@@ -1041,6 +1073,21 @@ function CustomerData() {
             </div>
           </div>
           
+          {/* Status Badge */}
+          <div style={{ marginBottom: '1rem' }}>
+            <span style={{
+              padding: '4px 8px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: '600',
+              background: customer.isDeleted ? '#fee2e2' : '#d1fae5',
+              color: customer.isDeleted ? '#dc2626' : '#065f46',
+              border: `1px solid ${customer.isDeleted ? '#fca5a5' : '#a7f3d0'}`
+            }}>
+              {customer.isDeleted ? 'Silindi' : 'Aktiv'}
+            </span>
+          </div>
+          
           <div style={styles.mobileCardInfo}>
             <div style={styles.mobileCardRow}>
               <div style={{
@@ -1146,7 +1193,10 @@ function CustomerData() {
               </div>
             </div>
             <div style={styles.statsBox}>
-              <p style={styles.statsText}>Cəmi Müştəri: {isNoCustomersError ? 0 : displayCustomers.length}</p>
+              <p style={styles.statsText}>
+                Aktiv Müştəri: {displayCustomers.filter(c => !c.isDeleted).length} | 
+                Cəmi: {displayCustomers.length}
+              </p>
             </div>
           </div>
 
@@ -1199,6 +1249,66 @@ function CustomerData() {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Status Filter Section */}
+        {(displayCustomers.length > 0 && !isNoCustomersError) && (
+          <div style={styles.searchCard}>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Status:</span>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => setStatusFilter('active')}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    borderRadius: '0.5rem',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    fontWeight: '600',
+                    background: statusFilter === 'active' ? '#16a34a' : '#f3f4f6',
+                    color: statusFilter === 'active' ? 'white' : '#374151',
+                    transition: 'all 0.2s ease',
+                    boxShadow: statusFilter === 'active' ? '0 2px 4px rgba(22, 163, 74, 0.2)' : 'none'
+                  }}
+                >
+                  ✅ Aktiv ({displayCustomers.filter(c => !c.isDeleted).length})
+                </button>
+                <button
+                  onClick={() => setStatusFilter('all')}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    borderRadius: '0.5rem',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                    background: statusFilter === 'all' ? '#3b82f6' : '#f3f4f6',
+                    color: statusFilter === 'all' ? 'white' : '#374151',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  📋 Hamısı ({displayCustomers.length})
+                </button>
+                <button
+                  onClick={() => setStatusFilter('deleted')}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    borderRadius: '0.5rem',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                    background: statusFilter === 'deleted' ? '#dc2626' : '#f3f4f6',
+                    color: statusFilter === 'deleted' ? 'white' : '#374151',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  🗑️ Silinmiş ({displayCustomers.filter(c => c.isDeleted).length})
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1286,6 +1396,11 @@ function CustomerData() {
                       </th>
                       <th style={styles.th}>
                         <div style={styles.thContent}>
+                          Status
+                        </div>
+                      </th>
+                      <th style={styles.th}>
+                        <div style={styles.thContent}>
                           Əməliyyat
                         </div>
                       </th>
@@ -1330,6 +1445,19 @@ function CustomerData() {
                         <td style={styles.td}>
                           <span style={{ color: (customer.debtAmount || customer.debt || 0) > 0 ? '#dc2626' : '#16a34a', fontWeight: '600' }}>
                             {(customer.debtAmount || customer.debt || 0)}
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          <span style={{
+                            padding: '4px 8px',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            background: customer.isDeleted ? '#fee2e2' : '#d1fae5',
+                            color: customer.isDeleted ? '#dc2626' : '#065f46',
+                            border: `1px solid ${customer.isDeleted ? '#fca5a5' : '#a7f3d0'}`
+                          }}>
+                            {customer.isDeleted ? 'Silindi' : 'Aktiv'}
                           </span>
                         </td>
                         <td style={styles.td}>

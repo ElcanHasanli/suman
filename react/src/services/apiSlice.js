@@ -38,13 +38,40 @@ export const apiSlice = createApi({
 
     // Customer endpoints - Swagger-ə uyğun
     getCustomers: builder.query({
-      query: () => '/customers/all',
+      query: () => '/customers/all?lang=az',
       providesTags: ['Customer'],
+      transformResponse: (response) => {
+        console.log('Get customers response:', response);
+        // Backend response formatını düzəld
+        if (response && response.response && Array.isArray(response.response)) {
+          return response.response.map(customer => {
+            console.log('Processing customer:', customer);
+            const isDeleted = customer.status === 0;
+            console.log('Customer isDeleted:', isDeleted, 'Status:', customer.status);
+            return {
+              ...customer,
+              isDeleted: isDeleted
+            };
+          });
+        }
+        return response;
+      },
     }),
 
     getCustomerById: builder.query({
-      query: (id) => `/customers/${id}`,
+      query: (id) => `/customers/${id}?lang=az`,
       providesTags: (result, error, id) => [{ type: 'Customer', id }],
+      transformResponse: (response) => {
+        console.log('Get customer by ID response:', response);
+        // Backend response formatını düzəld
+        if (response && response.response) {
+          return {
+            ...response.response,
+            isDeleted: response.response.status === 0
+          };
+        }
+        return response;
+      },
     }),
 
     createCustomer: builder.mutation({
@@ -67,10 +94,27 @@ export const apiSlice = createApi({
 
     deleteCustomer: builder.mutation({
       query: (id) => ({
-        url: `/customers/delete/${id}`,
+        url: `/customers/delete/${id}?lang=az`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['Customer'],
+      invalidatesTags: (result, error, id) => [
+        { type: 'Customer', id },
+        'Customer',
+        'getCustomers',
+        'getAllCustomers'
+      ],
+      // Soft delete response-unu düzgün idarə et
+      transformResponse: (response, meta, arg) => {
+        console.log('Delete customer response:', response);
+        if (response && (response.message === 'CUSTOMER_WAS_DELETED' || response.code === 4002)) {
+          return { 
+            success: true, 
+            message: 'Müştəri uğurla silindi', 
+            deletedId: arg 
+          };
+        }
+        return response;
+      },
     }),
 
     // Customer specific endpoints
@@ -109,14 +153,27 @@ export const apiSlice = createApi({
       providesTags: ['Customer'],
     }),
 
-    // Courier endpoints - hələ hazır deyil, test məlumatlarından istifadə edirik
-    // getCouriers: builder.query({
-    //   query: (params) => ({
-    //     url: '/couriers',
-    //     params,
-    //   }),
-    //   providesTags: ['Courier'],
-    // }),
+    // Customer loan endpoints
+    getCustomerLoanCarboyCount: builder.query({
+      query: () => '/customers/loan/carboy/count',
+      providesTags: ['Customer'],
+    }),
+
+    getCustomerCarboyLoans: builder.query({
+      query: () => '/customers/carboy/loans',
+      providesTags: ['Customer'],
+    }),
+
+    // Courier endpoints - Swagger-ə uyğun
+    getCouriers: builder.query({
+      query: () => '/couriers/all',
+      providesTags: ['Courier'],
+    }),
+
+    getCourierById: builder.query({
+      query: (id) => `/couriers/${id}`,
+      providesTags: (result, error, id) => [{ type: 'Courier', id }],
+    }),
 
     // File upload endpoints
     uploadFile: builder.mutation({
@@ -148,12 +205,26 @@ export const apiSlice = createApi({
     }),
 
     // Order endpoints - Swagger-ə uyğun
-    // getOrders: builder.query({
-    //   query: () => '/orders/all', // Bu endpoint hələ yoxdur
-    //   providesTags: ['Order'],
-    //   retry: false,
-    //   transformErrorResponse: () => [],
-    // }),
+    getOrders: builder.query({
+      query: () => '/orders/all?lang=az',
+      providesTags: ['Order'],
+      transformResponse: (response) => {
+        console.log('Get orders response:', response);
+        // Backend response formatını düzəld
+        if (response && response.response && Array.isArray(response.response)) {
+          return response.response.map(order => {
+            console.log('Processing order:', order);
+            const isDeleted = order.status === 0 || order.orderStatus === 'DELETED';
+            console.log('Order isDeleted:', isDeleted, 'Status:', order.status, 'OrderStatus:', order.orderStatus);
+            return {
+              ...order,
+              isDeleted: isDeleted
+            };
+          });
+        }
+        return response;
+      },
+    }),
 
     getOrderById: builder.query({
       query: (id) => `/orders/${id}`,
@@ -180,10 +251,32 @@ export const apiSlice = createApi({
 
     deleteOrder: builder.mutation({
       query: (id) => ({
-        url: `/orders/delete/${id}`,
+        url: `/orders/delete/${id}?lang=az`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['Order'],
+      invalidatesTags: (result, error, id) => [
+        { type: 'Order', id },
+        'Order',
+        'getOrders'
+      ],
+      // Soft delete response-unu düzgün idarə et
+      transformResponse: (response, meta, arg) => {
+        console.log('Delete order response:', response);
+        if (response && (response.message === 'ORDER_WAS_DELETED' || response.code === 4004)) {
+          return { 
+            success: true, 
+            message: 'Sifariş uğurla ləğv edildi', 
+            deletedId: arg 
+          };
+        }
+        return response;
+      },
+    }),
+
+    // Order count endpoint
+    getOrderCount: builder.query({
+      query: () => '/orders/count',
+      providesTags: ['Order'],
     }),
 
     // Order search and filter endpoints
@@ -200,11 +293,6 @@ export const apiSlice = createApi({
         url: '/orders/search-by-date',
         params: { date },
       }),
-      providesTags: ['Order'],
-    }),
-
-    getOrderCount: builder.query({
-      query: () => '/orders/count',
       providesTags: ['Order'],
     }),
   }),
@@ -228,23 +316,22 @@ export const {
   useExportCustomersQuery,
   useGetCustomerCountQuery,
   useGetAllCustomersQuery,
+  useGetCustomerLoanCarboyCountQuery,
+  useGetCustomerCarboyLoansQuery,
   
-  // Courier hooks - hələ hazır deyil
-  // useGetCouriersQuery,
-  // useGetCourierByIdQuery,
-  // useCreateCourierMutation,
-  // useUpdateCourierMutation,
-  // useDeleteCourierMutation,
+  // Courier hooks
+  useGetCouriersQuery,
+  useGetCourierByIdQuery,
   
   // Order hooks
-  // useGetOrdersQuery, // Bu endpoint hələ yoxdur
+  useGetOrdersQuery,
   useGetOrderByIdQuery,
   useCreateOrderMutation,
   useUpdateOrderMutation,
   useDeleteOrderMutation,
+  useGetOrderCountQuery,
   useSearchOrdersByCustomerQuery,
   useSearchOrdersByDateQuery,
-  // useGetOrderCountQuery, // Bu endpoint hələ yoxdur
   
   // File upload hooks
   useUploadFileMutation,
