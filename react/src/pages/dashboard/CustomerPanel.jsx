@@ -155,6 +155,49 @@ function CustomerPanel() {
     return dateString;
   };
 
+  // WhatsApp helpers for courier notification (frontend-only)
+  const normalizePhoneNumberForWhatsApp = (rawPhone) => {
+    if (!rawPhone) return '';
+    const digitsOnly = String(rawPhone).replace(/[^\d]/g, '');
+    if (digitsOnly.startsWith('00')) return digitsOnly.slice(2);
+    if (digitsOnly.startsWith('994')) return digitsOnly;
+    if (digitsOnly.startsWith('0')) return `994${digitsOnly.slice(1)}`;
+    return digitsOnly;
+  };
+
+  const openWhatsAppForOrder = (order) => {
+    try {
+      const courier = getCourier(Number(order.courierId));
+      const courierPhone = courier?.phone || courier?.phoneNumber;
+      const waNumber = normalizePhoneNumberForWhatsApp(courierPhone);
+      if (!waNumber) {
+        alert('Kuryerin WhatsApp nömrəsi yoxdur.');
+        return;
+      }
+
+      const customerName = order.customerFullName || (() => {
+        const c = getCustomer(order.customerId);
+        return c ? `${c.firstName} ${c.lastName}` : 'Müştəri';
+      })();
+
+      const courierName = courier?.name || courier?.fullName || 'Kuryer';
+      const dateText = order.orderDate || new Date().toLocaleDateString('az-AZ');
+      const timeText = order.orderTime || '';
+      const count = order.carboyCount || order.bidonOrdered || 0;
+
+      const message =
+        `Salam ${courierName}, sizə yeni sifariş təyin olundu.\n` +
+        `Müştəri: ${customerName}\n` +
+        `Tarix: ${dateText}${timeText ? ` Saat: ${timeText}` : ''}\n` +
+        `Bidon sayı: ${count}`;
+
+      const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      console.warn('WhatsApp open failed:', e);
+    }
+  };
+
   // Backend artıq customerFullName və courierFullName qaytarır, 
   // əlavə məlumat əlavə etməyə ehtiyac yoxdur
   const enrichedBackendOrders = backendOrders.map(order => {
@@ -420,6 +463,27 @@ function CustomerPanel() {
         // Create new order - tamamilə backend-də yaradılır
         const result = await createOrder(backendOrderData).unwrap();
         alert('Sifariş uğurla əlavə edildi!');
+
+        // WhatsApp notification to courier (click-to-chat)
+        try {
+          const courier = getCourier(Number(courierId));
+          const phone = courier?.phone || courier?.phoneNumber;
+          const waNumber = normalizePhoneNumberForWhatsApp(phone);
+          if (waNumber) {
+            const customer = getCustomer(Number(customerId));
+            const customerName = customer ? `${customer.firstName} ${customer.lastName}` : 'Müştəri';
+            const courierName = courier?.name || courier?.fullName || 'Kuryer';
+            const message =
+              `Salam ${courierName}, sizə yeni sifariş təyin olundu.\n` +
+              `Müştəri: ${customerName}\n` +
+              `Tarix: ${backendOrderData.orderDate} Saat: ${backendOrderData.orderTime}\n` +
+              `Bidon sayı: ${backendOrderData.carboyCount}`;
+            const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;
+            window.open(url, '_blank', 'noopener,noreferrer');
+          }
+        } catch (e) {
+          console.warn('WhatsApp open failed:', e);
+        }
       }
 
       // Refresh orders from backend
@@ -586,7 +650,7 @@ function CustomerPanel() {
 
 
       {/* Backend API Status Messages */}
-     
+
       
       {isLoadingCouriers && (
         <div style={{
@@ -1576,6 +1640,12 @@ function CustomerPanel() {
                                 Redaktə
                               </button>
                               <button
+                                onClick={() => openWhatsAppForOrder(order)}
+                                style={{ background: '#10b981', color: 'white', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '500' }}
+                              >
+                                WhatsApp
+                              </button>
+                              <button
                                 onClick={() => handleDeleteOrder(order.id)}
                                 style={{ background: '#ef4444', color: 'white', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '500' }}
                               >
@@ -1809,6 +1879,26 @@ function CustomerPanel() {
                       >
                         <Edit size={16} />
                         Redaktə
+                      </button>
+                      <button
+                        onClick={() => openWhatsAppForOrder(order)}
+                        style={{
+                          flex: 1,
+                          padding: '0.75rem',
+                          background: '#10b981',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontSize: '0.9rem',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.5rem'
+                        }}
+                      >
+                        WhatsApp
                       </button>
                       <button
                         onClick={() => handleDeleteOrder(order.id)}
