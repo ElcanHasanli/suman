@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Users, User, MapPin, Phone, DollarSign, Search, Download, Edit, Trash2 } from 'lucide-react';
+import { Plus, Users, User, MapPin, Phone, DollarSign, Search, Download, Edit, Trash2, RotateCcw, Archive } from 'lucide-react';
 import { toast } from 'react-toastify';
 import CustomerModal from '../../components/CustomerModal';
 import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
@@ -10,6 +10,8 @@ import {
   useCreateCustomerMutation, 
   useUpdateCustomerMutation, 
   useDeleteCustomerMutation,
+  // useRestoreCustomerMutation, // Backend-də mövcud deyil
+  // useGetDeletedCustomersQuery, // Backend-də mövcud deyil
   useSearchCustomerByPhoneQuery,
   useSearchCustomerByNameSurnameQuery,
   useExportCustomersQuery,
@@ -25,16 +27,20 @@ function CustomerData() {
   const [customerToDelete, setCustomerToDelete] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchType, setSearchType] = useState('general'); // general, phone, name
+  const [activeTab, setActiveTab] = useState('active'); // Yalnız active tab
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     address: '',
     phone: '',
     pricePerBidon: '',
+    activeBidonCount: '',
+    debtAmount: ''
   });
 
   // API hooks - indi aktiv
   const { data: customers = [], isLoading, error, refetch } = useGetCustomersQuery();
+  // const { data: deletedCustomers = [], isLoading: isLoadingDeleted, error: deletedError, refetch: refetchDeleted } = useGetDeletedCustomersQuery(); // Backend-də mövcud deyil
   const { data: customerCount = 0 } = useGetCustomerCountQuery();
   
   // Check if error is 404 (no customers) or actual error
@@ -43,9 +49,11 @@ function CustomerData() {
   
   // Use actual customers if available, otherwise empty array
   const displayCustomers = customers || [];
+  const displayDeletedCustomers = []; // Deleted customers API is not available yet
   const [createCustomer, { isLoading: isCreating }] = useCreateCustomerMutation();
   const [updateCustomer, { isLoading: isUpdating }] = useUpdateCustomerMutation();
   const [deleteCustomer, { isLoading: isDeleting }] = useDeleteCustomerMutation();
+  // const [restoreCustomer, { isLoading: isRestoring }] = useRestoreCustomerMutation(); // Backend-də mövcud deyil
   
   // Search hooks - indi aktiv
   const { data: phoneSearchResults = [] } = useSearchCustomerByPhoneQuery(searchTerm, {
@@ -71,6 +79,8 @@ function CustomerData() {
       address: customer.address || '',
       phone: customer.phoneNumber || customer.phone || '',
       pricePerBidon: customer.price || customer.pricePerBidon || '',
+      activeBidonCount: customer.activeBidonCount || customer.activeBidon || customer.bidonRemaining || 0,
+      debtAmount: customer.debtAmount || customer.debt || 0
     });
   };
 
@@ -86,9 +96,10 @@ function CustomerData() {
     if (!customerToDelete) return;
     
     try {
+      // Use existing DELETE endpoint which does soft delete
       await deleteCustomer(customerToDelete.id).unwrap();
       refetch();
-      toast.success('Müştəri uğurla silindi!');
+      toast.success('Müştəri arxivə göndərildi!');
       setDeleteModalOpen(false);
       setCustomerToDelete(null);
     } catch (error) {
@@ -96,6 +107,18 @@ function CustomerData() {
       toast.error('Müştəri silinərkən xəta baş verdi: ' + (error.data?.message || error.message));
     }
   };
+
+  // const handleRestoreCustomer = async (id) => {
+  //   try {
+  //     await restoreCustomer(id).unwrap();
+  //     refetch();
+  //     refetchDeleted();
+  //     toast.success('Müştəri bərpa edildi!');
+  //   } catch (error) {
+  //     console.error('Restore error:', error);
+  //     toast.error('Müştəri bərpa edilərkən xəta baş verdi: ' + (error.data?.message || error.message));
+  //   }
+  // };
 
   const cancelDelete = () => {
     setDeleteModalOpen(false);
@@ -111,6 +134,8 @@ function CustomerData() {
       address: '',
       phone: '',
       pricePerBidon: '',
+      activeBidonCount: '',
+      debtAmount: ''
     });
   };
 
@@ -123,6 +148,8 @@ function CustomerData() {
       address: '',
       phone: '',
       pricePerBidon: '',
+      activeBidonCount: '',
+      debtAmount: ''
     });
   };
 
@@ -149,13 +176,15 @@ function CustomerData() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    let { firstName, lastName, address, phone, pricePerBidon } = formData;
+    let { firstName, lastName, address, phone, pricePerBidon, activeBidonCount, debtAmount } = formData;
 
     firstName = firstName.trim();
     lastName = lastName.trim();
     address = address.trim();
     phone = phone.trim();
     pricePerBidon = pricePerBidon.toString().trim();
+    activeBidonCount = (activeBidonCount ?? '').toString().trim();
+    debtAmount = (debtAmount ?? '').toString().trim();
 
     if (!firstName || !lastName || !address || !phone || !pricePerBidon) {
       toast.warning('Zəhmət olmasa bütün sahələri doldurun!');
@@ -163,8 +192,18 @@ function CustomerData() {
     }
 
     const price = Number(pricePerBidon);
+    const activeBidons = activeBidonCount === '' ? 0 : Number(activeBidonCount);
+    const debt = debtAmount === '' ? 0 : Number(debtAmount);
     if (isNaN(price) || price <= 0) {
       toast.warning('Qiymət düzgün daxil edilməyib!');
+      return;
+    }
+    if (isNaN(activeBidons) || activeBidons < 0) {
+      toast.warning('Aktiv bidon sayı düzgün deyil!');
+      return;
+    }
+    if (isNaN(debt) || debt < 0) {
+      toast.warning('Borc məbləği düzgün deyil!');
       return;
     }
 
@@ -187,7 +226,9 @@ function CustomerData() {
         surname: lastName,
         address,
         phoneNumber: phone,
-        price: price
+        price: price,
+        activeBidonCount: activeBidons,
+        debtAmount: debt
       };
 
       if (editMode) {
@@ -210,6 +251,8 @@ function CustomerData() {
         address: '',
         phone: '',
         pricePerBidon: '',
+        activeBidonCount: '',
+        debtAmount: ''
       });
       setModalOpen(false);
       setEditMode(null);
@@ -249,9 +292,11 @@ function CustomerData() {
     }
   };
 
-  // Filtered customers based on search
+  // Filtered customers based on search and active tab
   const getFilteredCustomers = () => {
-    if (!searchTerm) return displayCustomers;
+    const currentCustomers = activeTab === 'active' ? displayCustomers : displayDeletedCustomers;
+    
+    if (!searchTerm) return currentCustomers;
 
     // Əgər search type phone və ya name-dirsə, API search istifadə et
     if (searchType === 'phone' && phoneSearchResults.length > 0) {
@@ -263,7 +308,7 @@ function CustomerData() {
     }
 
     // Əks halda local filter istifadə et
-    return displayCustomers.filter(customer => {
+    return currentCustomers.filter(customer => {
       const search = searchTerm.toLowerCase().trim();
       const fullName = `${customer.name || customer.firstName || ""} ${customer.surname || customer.lastName || ""}`.toLowerCase();
       return (
@@ -280,7 +325,7 @@ function CustomerData() {
   const styles = {
     container: {
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%)',
+      background: '#f8fafc',
       padding: '1rem',
       fontFamily: 'system-ui, -apple-system, sans-serif',
       '@media (minWidth: 768px)': {
@@ -300,11 +345,11 @@ function CustomerData() {
     },
     headerCard: {
       background: 'white',
-      borderRadius: '1rem',
-      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.1)',
-      border: '1px solid #f1f5f9',
-      padding: '1.25rem',
-      marginBottom: '1.5rem',
+      borderRadius: '10px',
+      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+      border: '1px solid #e5e7eb',
+      padding: '1rem',
+      marginBottom: '1rem',
       '@media (minWidth: 768px)': {
         borderRadius: '1.25rem',
         padding: '2rem',
@@ -356,9 +401,9 @@ function CustomerData() {
       }
     },
     iconBox: {
-      background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-      padding: '0.75rem',
-      borderRadius: '0.75rem',
+      background: '#e5e7eb',
+      padding: '0.5rem',
+      borderRadius: '0.5rem',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -377,9 +422,9 @@ function CustomerData() {
       flex: 1
     },
     title: {
-      fontSize: '1.5rem',
-      fontWeight: 'bold',
-      color: '#1f2937',
+      fontSize: '1.25rem',
+      fontWeight: 700,
+      color: '#111827',
       margin: '0 0 4px 0',
       '@media (minWidth: 768px)': {
         fontSize: '2rem'
@@ -403,10 +448,10 @@ function CustomerData() {
       }
     },
     statsBox: {
-      background: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
-      padding: '0.75rem 1rem',
-      borderRadius: '0.75rem',
-      border: '1px solid #93c5fd',
+      background: '#f8fafc',
+      padding: '0.5rem 0.75rem',
+      borderRadius: '0.5rem',
+      border: '1px solid #e5e7eb',
       alignSelf: 'flex-start',
       '@media (minWidth: 768px)': {
         padding: '0.75rem 1.5rem'
@@ -435,86 +480,107 @@ function CustomerData() {
     buttonGroup: {
       display: 'flex',
       gap: '0.75rem',
-      flexDirection: 'column',
+      flexDirection: 'row',
       width: '100%',
+      flexWrap: 'wrap',
+      alignItems: 'center',
       '@media (minWidth: 640px)': {
         flexDirection: 'row',
-        width: 'auto'
+        width: 'auto',
+        flexWrap: 'nowrap'
       },
       '@media (maxWidth: 767px)': {
-        gap: '0.375rem',
+        gap: '0.5rem',
         flexDirection: 'row',
         width: 'auto',
-        flexWrap: 'wrap'
+        flexWrap: 'wrap',
+        justifyContent: 'center'
       }
     },
     addButton: {
       background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-      color: 'white',
-      padding: '0.875rem 1.5rem',
+      color: '#ffffff',
+      padding: '0.75rem 1.25rem',
       borderRadius: '0.75rem',
       border: 'none',
       cursor: 'pointer',
       fontWeight: '600',
       fontSize: '0.875rem',
-      boxShadow: '0 10px 25px -5px rgba(37, 99, 235, 0.3)',
+      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
       transition: 'all 0.3s ease',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       gap: '0.5rem',
-      width: '100%',
+      whiteSpace: 'nowrap',
       '@media (minWidth: 640px)': {
-        width: 'auto',
-        fontSize: '1rem',
-        padding: '1rem 2rem',
-        gap: '0.75rem'
+        padding: '0.875rem 1.5rem',
+        fontSize: '0.9375rem',
+        gap: '0.625rem'
       },
       '@media (maxWidth: 767px)': {
-        padding: '0.5rem 0.75rem',
-        fontSize: '0.75rem',
-        borderRadius: '0.375rem',
-        width: 'auto',
-        minWidth: 'fit-content'
+        padding: '0.625rem 1rem',
+        fontSize: '0.8125rem',
+        borderRadius: '0.5rem',
+        gap: '0.375rem'
+      },
+      '&:hover': {
+        transform: 'translateY(-2px)',
+        boxShadow: '0 6px 16px rgba(37, 99, 235, 0.35)'
+      },
+      '&:active': {
+        transform: 'translateY(0)'
       }
     },
     exportButton: {
-      background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-      color: 'white',
-      padding: '0.875rem 1.5rem',
+      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+      color: '#ffffff',
+      padding: '0.75rem 1.25rem',
       borderRadius: '0.75rem',
       border: 'none',
       cursor: 'pointer',
       fontWeight: '600',
       fontSize: '0.875rem',
-      boxShadow: '0 10px 25px -5px rgba(5, 150, 105, 0.3)',
+      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
       transition: 'all 0.3s ease',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       gap: '0.5rem',
-      width: '100%',
-          '@media (minWidth: 640px)': {
-        width: 'auto',
-        fontSize: '1rem',
-        padding: '1rem 1.5rem',
-        gap: '0.75rem'
+      whiteSpace: 'nowrap',
+      '@media (minWidth: 640px)': {
+        padding: '0.875rem 1.5rem',
+        fontSize: '0.9375rem',
+        gap: '0.625rem'
       },
-        '@media (maxWidth: 767px)': {
-        padding: '0.5rem 0.75rem',
-        fontSize: '0.75rem',
-        borderRadius: '0.375rem',
-        width: 'auto',
-        minWidth: 'fit-content'
+      '@media (maxWidth: 767px)': {
+        padding: '0.625rem 1rem',
+        fontSize: '0.8125rem',
+        borderRadius: '0.5rem',
+        gap: '0.375rem'
+      },
+      '&:hover': {
+        transform: 'translateY(-2px)',
+        boxShadow: '0 6px 16px rgba(16, 185, 129, 0.35)'
+      },
+      '&:active': {
+        transform: 'translateY(0)'
+      },
+      '&:disabled': {
+        background: '#9ca3af',
+        cursor: 'not-allowed',
+        boxShadow: 'none',
+        transform: 'none',
+        opacity: 0.6
       }
     },
     searchCard: {
       background: 'white',
-      borderRadius: '1rem',
-      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.1)',
-      border: '1px solid #f1f5f9',
-      padding: '1.25rem',
-      marginBottom: '1.5rem',
+      borderRadius: '10px',
+      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+      border: '1px solid #e5e7eb',
+      padding: '1rem',
+      marginBottom: '1rem',
       '@media (minWidth: 768px)': {
         borderRadius: '1.25rem',
         padding: '1.5rem',
@@ -533,9 +599,9 @@ function CustomerData() {
     },
     searchInput: {
       width: '100%',
-      padding: '1rem 1rem 1rem 3rem',
-      border: '2px solid #e5e7eb',
-      borderRadius: '0.75rem',
+      padding: '0.75rem 0.75rem 0.75rem 2.5rem',
+      border: '1px solid #e5e7eb',
+      borderRadius: '0.5rem',
       fontSize: '1rem',
       background: '#f9fafb',
       transition: 'all 0.3s ease',
@@ -563,11 +629,11 @@ function CustomerData() {
     },
     formCard: {
       background: 'white',
-      borderRadius: '1rem',
-      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.1)',
-      border: '1px solid #f1f5f9',
-      padding: '1.25rem',
-      marginBottom: '1.5rem',
+      borderRadius: '10px',
+      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+      border: '1px solid #e5e7eb',
+      padding: '1rem',
+      marginBottom: '1rem',
       '@media (minWidth: 768px)': {
         borderRadius: '1.25rem',
         padding: '2rem',
@@ -580,10 +646,10 @@ function CustomerData() {
       }
     },
     formHeader: {
-      background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
-      borderRadius: '0.75rem',
-      padding: '1.5rem',
-      marginBottom: '1.5rem',
+      background: '#f8fafc',
+      borderRadius: '0.5rem',
+      padding: '1rem',
+      marginBottom: '1rem',
       '@media (maxWidth: 767px)': {
         padding: '1rem',
         marginBottom: '1rem',
@@ -591,9 +657,9 @@ function CustomerData() {
       }
     },
     formTitle: {
-      fontSize: '1.25rem',
-      fontWeight: 'bold',
-      color: 'white',
+      fontSize: '1.125rem',
+      fontWeight: 700,
+      color: '#111827',
       margin: '0 0 8px 0',
       '@media (minWidth: 768px)': {
         fontSize: '1.5rem'
@@ -604,7 +670,7 @@ function CustomerData() {
       }
     },
     formSubtitle: {
-      color: 'rgba(255, 255, 255, 0.8)',
+      color: '#6b7280',
       margin: 0,
       fontSize: '0.875rem',
       '@media (minWidth: 768px)': {
@@ -648,9 +714,9 @@ function CustomerData() {
     },
     input: {
       width: '100%',
-      padding: '0.875rem 1rem',
-      border: '1px solid #d1d5db',
-      borderRadius: '0.75rem',
+      padding: '0.75rem 0.75rem',
+      border: '1px solid #e5e7eb',
+      borderRadius: '0.5rem',
       fontSize: '1rem',
       background: '#f9fafb',
       transition: 'all 0.3s ease',
@@ -663,15 +729,15 @@ function CustomerData() {
     },
     submitButton: {
       width: '100%',
-      background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-      color: 'white',
-      padding: '1rem 2rem',
-      borderRadius: '0.75rem',
+      background: '#10b981',
+      color: '#ffffff',
+      padding: '0.875rem 1.5rem',
+      borderRadius: '0.5rem',
       border: 'none',
       cursor: 'pointer',
       fontWeight: 'bold',
       fontSize: '1rem',
-      boxShadow: '0 10px 25px -5px rgba(5, 150, 105, 0.3)',
+      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
       transition: 'all 0.3s ease',
       '@media (maxWidth: 767px)': {
         padding: '0.875rem 1.5rem',
@@ -681,9 +747,9 @@ function CustomerData() {
     },
     tableCard: {
       background: 'white',
-      borderRadius: '1rem',
-      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.1)',
-      border: '1px solid #f1f5f9',
+      borderRadius: '10px',
+      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+      border: '1px solid #e5e7eb',
       overflow: 'hidden',
       '@media (minWidth: 768px)': {
         borderRadius: '1.25rem'
@@ -694,16 +760,17 @@ function CustomerData() {
       }
     },
     tableHeader: {
-      background: 'linear-gradient(135deg, #1f2937 0%, #111827 100%)',
-      padding: '1.5rem',
+      background: '#f8fafc',
+      padding: '1rem',
+      borderBottom: '1px solid #e5e7eb',
       '@media (maxWidth: 767px)': {
         padding: '1rem'
       }
     },
     tableTitle: {
-      fontSize: '1.25rem',
-      fontWeight: 'bold',
-      color: 'white',
+      fontSize: '1.125rem',
+      fontWeight: 700,
+      color: '#111827',
       margin: '0 0 4px 0',
       '@media (minWidth: 768px)': {
         fontSize: '1.5rem'
@@ -714,7 +781,7 @@ function CustomerData() {
       }
     },
     tableSubtitle: {
-      color: '#d1d5db',
+      color: '#6b7280',
       margin: 0,
       fontSize: '0.875rem',
       '@media (minWidth: 768px)': {
@@ -737,14 +804,14 @@ function CustomerData() {
       }
     },
     tableHeadRow: {
-      background: 'linear-gradient(135deg, #dbeafe 0%, #c7d2fe 100%)'
+      background: '#f8fafc'
     },
     th: {
-      padding: '1rem',
+      padding: '0.75rem 1rem',
       textAlign: 'left',
-      fontWeight: 'bold',
-      color: '#1f2937',
-      borderBottom: '2px solid #3b82f6',
+      fontWeight: 600,
+      color: '#374151',
+      borderBottom: '1px solid #e5e7eb',
       fontSize: '0.875rem',
       '@media (minWidth: 768px)': {
         padding: '1rem 1.5rem',
@@ -764,7 +831,7 @@ function CustomerData() {
       }
     },
     td: {
-      padding: '1rem',
+      padding: '0.75rem 1rem',
       borderBottom: '1px solid #e5e7eb',
       fontSize: '0.875rem',
       '@media (minWidth: 768px)': {
@@ -783,11 +850,11 @@ function CustomerData() {
       background: 'white'
     },
     priceBadge: {
-      background: '#dcfce7',
-      color: '#166534',
-      padding: '0.25rem 0.75rem',
-      borderRadius: '1rem',
-      fontWeight: 'bold',
+      background: '#eef2ff',
+      color: '#1e40af',
+      padding: '0.25rem 0.5rem',
+      borderRadius: '0.375rem',
+      fontWeight: 600,
       fontSize: '0.75rem',
       '@media (minWidth: 768px)': {
         fontSize: '0.875rem'
@@ -810,15 +877,15 @@ function CustomerData() {
       }
     },
     editButton: {
-      background: '#3b82f6',
-      color: 'white',
+      background: '#2563eb',
+      color: '#ffffff',
       padding: '0.5rem 0.75rem',
-      borderRadius: '0.5rem',
+      borderRadius: '0.375rem',
       border: 'none',
       cursor: 'pointer',
       fontSize: '0.75rem',
       fontWeight: '500',
-      transition: 'background 0.3s ease',
+      transition: 'background 0.2s ease',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -835,14 +902,14 @@ function CustomerData() {
     },
     deleteButton: {
       background: '#ef4444',
-      color: 'white',
+      color: '#ffffff',
       padding: '0.5rem 0.75rem',
-      borderRadius: '0.5rem',
+      borderRadius: '0.375rem',
       border: 'none',
       cursor: 'pointer',
       fontSize: '0.75rem',
       fontWeight: '500',
-      transition: 'background 0.3s ease',
+      transition: 'background 0.2s ease',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -944,6 +1011,61 @@ function CustomerData() {
       border: 'none',
       cursor: 'pointer',
       marginTop: '1rem'
+    },
+    tabContainer: {
+      display: 'flex',
+      background: '#f8fafc',
+      borderRadius: '0.75rem',
+      padding: '0.25rem',
+      marginBottom: '1.5rem',
+      border: '1px solid #e5e7eb'
+    },
+    tabButton: {
+      flex: 1,
+      padding: '0.75rem 1rem',
+      borderRadius: '0.5rem',
+      border: 'none',
+      background: 'transparent',
+      cursor: 'pointer',
+      fontSize: '0.875rem',
+      fontWeight: '600',
+      transition: 'all 0.2s ease',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '0.5rem'
+    },
+    activeTab: {
+      background: '#2563eb',
+      color: 'white',
+      boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+    },
+    inactiveTab: {
+      color: '#6b7280'
+    },
+    restoreButton: {
+      background: '#10b981',
+      color: '#ffffff',
+      padding: '0.5rem 0.75rem',
+      borderRadius: '0.375rem',
+      border: 'none',
+      cursor: 'pointer',
+      fontSize: '0.75rem',
+      fontWeight: '500',
+      transition: 'background 0.2s ease',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '0.25rem',
+      '@media (minWidth: 768px)': {
+        fontSize: '0.875rem',
+        padding: '0.375rem 0.75rem'
+      },
+      '@media (maxWidth: 767px)': {
+        fontSize: '0.7rem',
+        padding: '0.375rem 0.5rem',
+        borderRadius: '0.375rem'
+      }
     }
   };
 
@@ -1001,7 +1123,10 @@ function CustomerData() {
   const MobileCustomerCards = ({ customers }) => (
     <div style={{ padding: '0.5rem' }}>
       {customers.map((customer) => (
-        <div key={customer.id} style={styles.mobileCard}>
+        <div key={customer.id} style={{
+          ...styles.mobileCard,
+          border: '1px solid #f1f5f9'
+        }}>
           <div style={styles.mobileCardHeader}>
             <div style={styles.mobileCardName}>
               {customer.name || customer.firstName} {customer.surname || customer.lastName}
@@ -1090,10 +1215,10 @@ function CustomerData() {
                 borderRadius: '0.75rem'
               }}
               disabled={isDeleting}
-              title="Sil"
+              title="Arxivlə"
             >
-              <Trash2 size={18} />
-              <span style={{ marginLeft: '0.5rem' }}>Sil</span>
+              <Archive size={18} />
+              <span style={{ marginLeft: '0.5rem' }}>Arxivlə</span>
             </button>
           </div>
         </div>
@@ -1122,32 +1247,49 @@ function CustomerData() {
               </div>
             </div>
             <div style={styles.statsBox}>
-              <p style={styles.statsText}>Cəmi Müştəri: {isNoCustomersError ? 0 : displayCustomers.length}</p>
+              <p style={styles.statsText}>
+                Aktiv: {isNoCustomersError ? 0 : displayCustomers.length} | 
+                Arxivlənmiş: {displayDeletedCustomers.length}
+              </p>
             </div>
           </div>
 
           <div style={styles.buttonGroup}>
             <button
               onClick={handleOpenModal}
+              className="customer-action-btn customer-add-btn"
               style={{
                 ...styles.addButton,
-                background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-                boxShadow: '0 10px 25px -5px rgba(37, 99, 235, 0.3)'
               }}
             >
-              <Plus size={16} />
-              <span>{(displayCustomers.length === 0 || isNoCustomersError) ? 'İlk Müştərini Əlavə Et' : 'Yeni Müştəri Əlavə Et'}</span>
+              <Plus size={18} />
+              <span>Müştəri Əlavə Et</span>
             </button>
 
             <button
               onClick={handleExportCustomers}
+              className="customer-action-btn customer-export-btn"
               style={styles.exportButton}
               disabled={displayCustomers.length === 0 || isNoCustomersError}
             >
-                             <Download size={16} />
-              <span>Excel Export</span>
+              <Download size={18} />
+              <span>Export</span>
             </button>
           </div>
+        </div>
+
+        {/* Tabs Section */}
+        <div style={styles.tabContainer}>
+          <button
+            onClick={() => setActiveTab('active')}
+            style={{
+              ...styles.tabButton,
+              ...(activeTab === 'active' ? styles.activeTab : styles.inactiveTab)
+            }}
+          >
+            <Users size={16} />
+            Aktiv Müştərilər ({displayCustomers.length})
+          </button>
         </div>
 
         {/* Search Section */}
@@ -1203,9 +1345,11 @@ function CustomerData() {
         {(displayCustomers.length > 0 && !isNoCustomersError) && (
           <div style={styles.tableCard}>
             <div style={styles.tableHeader}>
-              <h2 style={styles.tableTitle}>Müştəri Siyahısı</h2>
+              <h2 style={styles.tableTitle}>
+                Aktiv Müştərilər
+              </h2>
               <p style={styles.tableSubtitle}>
-                {searchTerm ? `"${searchTerm}" axtarışı üçün nəticələr` : 'Bütün müştəri məlumatları'}
+                {searchTerm ? `"${searchTerm}" axtarışı üçün nəticələr` : 'Aktiv müştəri məlumatları'}
               </p>
             </div>
 
@@ -1252,6 +1396,16 @@ function CustomerData() {
                       </th>
                       <th style={styles.th}>
                         <div style={styles.thContent}>
+                          Aktiv Bidon
+                        </div>
+                      </th>
+                      <th style={styles.th}>
+                        <div style={styles.thContent}>
+                          Borc (AZN)
+                        </div>
+                      </th>
+                      <th style={styles.th}>
+                        <div style={styles.thContent}>
                           Əməliyyat
                         </div>
                       </th>
@@ -1261,7 +1415,9 @@ function CustomerData() {
                     {filteredCustomers.map((customer, index) => (
                       <tr
                         key={customer.id}
-                        style={index % 2 === 0 ? styles.evenRow : styles.oddRow}
+                        style={{
+                          ...(index % 2 === 0 ? styles.evenRow : styles.oddRow)
+                        }}
                       >
                         <td style={styles.td}>
                           <span style={{ fontWeight: '600', color: '#1f2937' }}>
@@ -1284,8 +1440,23 @@ function CustomerData() {
                           </span>
                         </td>
                         <td style={styles.td}>
-                          <span style={styles.priceBadge}>
+                          <span style={{
+                            ...styles.priceBadge,
+                            background: '#eef2ff',
+                            color: '#1e40af',
+                            border: '1px solid #c7d2fe'
+                          }}>
                             {customer.price || customer.pricePerBidon} {customer.currency || 'AZN'}
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          <span>
+                            {customer.activeBidonCount || customer.activeBidon || customer.bidonRemaining || 0}
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          <span style={{ color: (customer.debtAmount || customer.debt || 0) > 0 ? '#dc2626' : '#16a34a', fontWeight: '600' }}>
+                            {(customer.debtAmount || customer.debt || 0)}
                           </span>
                         </td>
                         <td style={styles.td}>
@@ -1304,11 +1475,11 @@ function CustomerData() {
                               onClick={() => handleDeleteCustomer(customer.id)}
                               style={styles.deleteButton}
                               disabled={isDeleting}
-                              title="Sil"
+                              title="Arxivlə"
                             >
-                              <Trash2 size={14} />
+                              <Archive size={14} />
                               <span style={{ display: window.innerWidth < 640 ? 'none' : 'inline' }}>
-                                Sil
+                                Arxivlə
                               </span>
                             </button>
                           </div>
@@ -1332,20 +1503,37 @@ function CustomerData() {
         )}
 
         {/* Empty State for No Customers */}
-        {(displayCustomers.length === 0 || isNoCustomersError) && (
+        {activeTab === 'active' && (displayCustomers.length === 0 || isNoCustomersError) && (
           <div style={styles.emptyState}>
             <Users size={64} color="#d1d5db" style={{ margin: '0 auto 16px' }} />
             <h3 style={styles.emptyTitle}>Hələ müştəri yoxdur</h3>
             <p style={styles.emptyText}>İlk müştərinizi əlavə etmək üçün yuxarıdakı düyməni basın</p>
           </div>
         )}
+
       </div>
 
       <style>{`
-        /* Hover effects */
-        button:hover {
+        /* Hover effects for buttons */
+        .customer-action-btn:hover:not(:disabled) {
           transform: translateY(-2px);
-          box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.2);
+        }
+        
+        .customer-add-btn:hover:not(:disabled) {
+          box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35) !important;
+        }
+        
+        .customer-export-btn:hover:not(:disabled) {
+          box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35) !important;
+        }
+        
+        .customer-action-btn:active:not(:disabled) {
+          transform: translateY(0);
+        }
+        
+        .customer-action-btn:disabled {
+          cursor: not-allowed !important;
+          opacity: 0.6 !important;
         }
         
         input:focus {

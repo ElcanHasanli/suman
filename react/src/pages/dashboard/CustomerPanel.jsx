@@ -1,39 +1,18 @@
 import { useState, useContext } from 'react';
-import { Plus, Package, Users, User, Phone, MapPin, DollarSign, Calendar, Droplets, Search, X, Edit, Trash2, Menu } from 'lucide-react';
+import { Plus, Package, Users, User, Phone, MapPin, DollarSign, Calendar, Droplets, Search, X, Edit, Trash2, Menu, CheckCircle, Clock } from 'lucide-react';
+import { useOrders } from '../../contexts/OrdersContext';
 
 function CustomerPanel() {
-  // Mock data for demonstration
-  const customers = [
+  const { getOrdersForDate, addOrderForDate, customers: ctxCustomers } = useOrders();
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  // Customers from context (fallback to minimal demo if empty)
+  const customers = ctxCustomers && ctxCustomers.length > 0 ? ctxCustomers : [
     { id: 1, firstName: 'Əli', lastName: 'Məmmədov', phone: '+994501234567', address: 'Yasamal rayonu', pricePerBidon: 5 },
     { id: 2, firstName: 'Ayşə', lastName: 'Həsənova', phone: '+994551234567', address: 'Nizami rayonu', pricePerBidon: 6 }
   ];
 
-  const testOrders = [
-    {
-      id: 1,
-      customerId: 1,
-      courierId: 1,
-      date: '2024-01-15',
-      bidonOrdered: 10,
-      bidonReturned: 8,
-      bidonTakenByCourier: 2,
-      bidonRemaining: 0,
-      paymentMethod: 'cash',
-      completed: true
-    },
-    {
-      id: 2,
-      customerId: 2,
-      courierId: 2,
-      date: '2024-01-16',
-      bidonOrdered: 15,
-      bidonReturned: 0,
-      bidonTakenByCourier: 0,
-      bidonRemaining: 15,
-      paymentMethod: null,
-      completed: false
-    }
-  ];
+  const ordersForDate = getOrdersForDate(selectedDate);
 
   const testCouriers = [
     { id: 1, name: 'Əli Məmmədov', phone: '+994501234567', vehicle: 'Motosiklet' },
@@ -47,7 +26,6 @@ function CustomerPanel() {
     date: '',
     bidonOrdered: '',
     courierId: '',
-    paymentMethod: '',
   });
 
   const [customerSearch, setCustomerSearch] = useState('');
@@ -80,7 +58,7 @@ function CustomerPanel() {
     return name.includes(searchTerm) || phone.includes(searchTerm) || vehicle.includes(searchTerm);
   });
 
-  const filteredOrders = testOrders.filter(order => {
+  const filteredOrders = ordersForDate.filter(order => {
     const customer = getCustomer(order.customerId);
     const courier = getCourier(order.courierId);
     const customerName = customer ? `${customer.firstName} ${customer.lastName}`.toLowerCase() : '';
@@ -106,6 +84,15 @@ function CustomerPanel() {
   }, {});
 
   const sortedDates = Object.keys(groupedOrders).sort((a, b) => new Date(b) - new Date(a));
+
+  // Stats derived from filtered orders
+  const completedOrders = filteredOrders.filter(order => order.completed);
+  const pendingOrders = filteredOrders.filter(order => !order.completed);
+  const totalRevenue = completedOrders.reduce((total, order) => {
+    const customer = getCustomer(order.customerId);
+    const pricePerBidon = customer?.pricePerBidon ?? 5;
+    return total + (order.bidonOrdered * pricePerBidon);
+  }, 0);
 
   const handleCustomerSelect = (customer) => {
     setNewOrder(prev => ({ ...prev, customerId: customer.id }));
@@ -143,7 +130,16 @@ function CustomerPanel() {
       return;
     }
 
-    setNewOrder({ customerId: '', date: '', bidonOrdered: '', courierId: '', paymentMethod: '' });
+    // Persist new order to selected date in context
+    addOrderForDate(selectedDate, {
+      customerId: Number(customerId),
+      courierId: Number(courierId),
+      bidonOrdered: Number(bidonOrdered),
+      paymentMethod: '', // Kuryer tərəfindən doldurulacaq
+      completed: false
+    });
+
+    setNewOrder({ customerId: '', date: '', bidonOrdered: '', courierId: '' });
     setSelectedCustomerName('');
     setSelectedCourierName('');
     setCustomerSearch('');
@@ -155,7 +151,7 @@ function CustomerPanel() {
 
   const openOrderModal = () => {
     setShowOrderModal(true);
-    setNewOrder({ customerId: '', date: '', bidonOrdered: '', courierId: '', paymentMethod: '' });
+    setNewOrder({ customerId: '', date: '', bidonOrdered: '', courierId: '' });
     setSelectedCustomerName('');
     setSelectedCourierName('');
     setCustomerSearch('');
@@ -165,13 +161,15 @@ function CustomerPanel() {
 
   const closeOrderModal = () => {
     setShowOrderModal(false);
-    setNewOrder({ customerId: '', date: '', bidonOrdered: '', courierId: '', paymentMethod: '' });
+    setNewOrder({ customerId: '', date: '', bidonOrdered: '', courierId: '' });
     setSelectedCustomerName('');
     setSelectedCourierName('');
     setCustomerSearch('');
     setCourierSearch('');
     setEditingOrder(null);
   };
+
+  // Sifarişi tamamla funksionallığı bu paneldən çıxarıldı (kuryer panelində olacaq)
 
   const selectedCustomer = newOrder.customerId ? getCustomer(newOrder.customerId) : null;
   const selectedCourier = newOrder.courierId ? getCourier(newOrder.courierId) : null;
@@ -186,19 +184,19 @@ function CustomerPanel() {
     }}>
       {/* Mobile Header */}
       <div style={{ 
-        background: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)', 
-        color: 'white',
+        background: '#ffffff',
+        color: '#111827',
         padding: '1rem',
         top: 0,
         zIndex: 100,
-        borderBottom: '1px solid rgba(255,255,255,0.1)'
+        borderBottom: '1px solid #e5e7eb'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <div style={{ 
             width: '40px', 
             height: '40px', 
-            background: 'rgba(255,255,255,0.2)', 
-            borderRadius: '10px', 
+            background: '#f3f4f6', 
+            borderRadius: '8px', 
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center'
@@ -206,9 +204,41 @@ function CustomerPanel() {
             <Package size={20} />
           </div>
           <div>
-            <h1 style={{ fontSize: '1.25rem', fontWeight: '700', margin: 0 }}>Sifarişlər</h1>
-            <p style={{ fontSize: '0.8rem', margin: 0, opacity: 0.9 }}>Sifariş idarəsi</p>
+            <h1 style={{ fontSize: '1.125rem', fontWeight: 700, margin: 0, color: '#111827' }}>Sifarişlər</h1>
+            <p style={{ fontSize: '0.875rem', margin: 0, color: '#6b7280' }}>Sifariş idarəsi</p>
           </div>
+        </div>
+      </div>
+      {/* Date Picker for viewing orders by date */}
+      <div style={{ padding: '1rem', paddingTop: '0.75rem' }}>
+        <div style={{ 
+          background: 'white', 
+          borderRadius: '10px', 
+          padding: '0.75rem 1rem',
+          border: '1px solid #e5e7eb',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.75rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#374151', fontWeight: 600 }}>
+            <Calendar size={16} />
+            Tarix seçin
+          </div>
+          <input 
+            type="date" 
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            style={{
+              padding: '0.6rem 0.75rem',
+              border: '2px solid #e5e7eb',
+              borderRadius: '0.75rem',
+              fontSize: '0.95rem',
+              background: '#f9fafb',
+              color: '#374151',
+              outline: 'none'
+            }}
+          />
         </div>
       </div>
 
@@ -219,10 +249,10 @@ function CustomerPanel() {
           style={{
             width: '100%',
             padding: '1rem',
-            background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
-            color: 'white',
+            background: '#2563eb',
+            color: '#ffffff',
             border: 'none',
-            borderRadius: '12px',
+            borderRadius: '10px',
             fontSize: '1rem',
             fontWeight: '600',
             display: 'flex',
@@ -230,7 +260,7 @@ function CustomerPanel() {
             justifyContent: 'center',
             gap: '0.5rem',
             cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(22,163,74,0.3)'
+            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
           }}
         >
           <Plus size={20} />
@@ -255,26 +285,26 @@ function CustomerPanel() {
         }}>
           <div style={{
             background: 'white',
-            borderRadius: '20px',
+              borderRadius: '12px',
             width: '100%',
             maxWidth: '500px',
             maxHeight: '90vh',
             overflowY: 'auto',
             position: 'relative',
-            boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)'
+              boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)'
           }}>
             {/* Modal Header */}
             <div style={{
               padding: '1.5rem 1.5rem 1rem 1.5rem',
-              borderBottom: '1px solid #e5e7eb',
+                borderBottom: '1px solid #e5e7eb',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between'
             }}>
               <h3 style={{ 
-                fontSize: '1.25rem', 
-                fontWeight: '700', 
-                color: '#1f2937', 
+                  fontSize: '1.125rem', 
+                  fontWeight: 700, 
+                  color: '#111827', 
                 margin: 0
               }}>
                 {editingOrder ? 'Sifarişi Redaktə Et' : 'Yeni Sifariş Əlavə Et'}
@@ -622,7 +652,7 @@ function CustomerPanel() {
                     )}
                   </div>
 
-                  {/* Ödəniş Metodu */}
+                  {/* Məbləğ Göstərilməsi */}
                   <div>
                     <label style={{ 
                       display: 'block', 
@@ -635,27 +665,22 @@ function CustomerPanel() {
                       gap: '0.5rem'
                     }}>
                       <DollarSign size={16} />
-                      Ödəniş Metodu
+                      Hesablanmış Məbləğ
                     </label>
-                    <select
-                      value={newOrder.paymentMethod || ''}
-                      onChange={(e) => setNewOrder({ ...newOrder, paymentMethod: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '1rem',
-                        border: '2px solid #e5e7eb',
-                        borderRadius: '12px',
-                        fontSize: '1rem',
-                        background: 'white',
-                        outline: 'none',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      <option value="">Ödəniş Metodu Seçin</option>
-                      <option value="cash">Nağd</option>
-                      <option value="card">Kart</option>
-                      <option value="credit">Nəsiyə</option>
-                    </select>
+                    <div style={{
+                      width: '100%',
+                      padding: '1rem',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '12px',
+                      fontSize: '1rem',
+                      background: '#f0fdf4',
+                      color: '#16a34a',
+                      fontWeight: '700',
+                      textAlign: 'center',
+                      boxSizing: 'border-box'
+                    }}>
+                      {totalAmount > 0 ? `${totalAmount} AZN` : 'Məbləğ hesablanacaq'}
+                    </div>
                   </div>
 
                   {/* Məlumat Preview */}
@@ -745,39 +770,90 @@ function CustomerPanel() {
         </div>
       )}
 
-      {/* Statistics */}
+      
+
+      {/* Statistics (moved from Daily Process) */}
       <div style={{ padding: '0 1rem 1rem' }}>
         <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: '1fr 1fr', 
-          gap: '1rem' 
+                display: 'grid', 
+                gridTemplateColumns: '1fr 1fr', 
+          gap: '1rem',
+                marginBottom: '0.5rem'
         }}>
-          <div style={{ 
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 
-            color: 'white', 
-            padding: '1.25rem', 
-            borderRadius: '16px', 
-            textAlign: 'center',
-            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
-          }}>
-            <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.5rem', fontWeight: '700' }}>
-              {testOrders.length}
-            </h3>
-            <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.9 }}>Ümumi</p>
+                <div style={{
+                  background: '#f1f5f9',
+                  color: '#0f172a',
+                  padding: '1rem',
+                  borderRadius: '10px',
+                  textAlign: 'center',
+                  boxShadow: 'none',
+                  border: '1px solid #e5e7eb'
+                }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <Package size={16} />
+                    <span style={{ fontSize: '0.75rem', color: '#475569' }}>ÜMUMİ</span>
+            </div>
+            <div style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '0.25rem' }}>
+              {filteredOrders.length}
+            </div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>sifariş</div>
           </div>
-          
-          <div style={{ 
-            background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', 
-            color: 'white', 
-            padding: '1.25rem', 
-            borderRadius: '16px', 
-            textAlign: 'center',
-            boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)'
-          }}>
-            <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.5rem', fontWeight: '700' }}>
-              {testOrders.filter(o => !o.completed).length}
-            </h3>
-            <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.9 }}>Gözləyən</p>
+
+                <div style={{
+                  background: '#eef2ff',
+                  color: '#0f172a',
+                  padding: '1rem',
+                  borderRadius: '10px',
+                  textAlign: 'center',
+                  boxShadow: 'none',
+                  border: '1px solid #e5e7eb'
+                }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <CheckCircle size={16} />
+                    <span style={{ fontSize: '0.75rem', color: '#475569' }}>HAZIR</span>
+            </div>
+            <div style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '0.25rem' }}>
+              {completedOrders.length}
+            </div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>sifariş</div>
+          </div>
+
+                <div style={{
+                  background: '#fff7ed',
+                  color: '#0f172a',
+                  padding: '1rem',
+                  borderRadius: '10px',
+                  textAlign: 'center',
+                  boxShadow: 'none',
+                  border: '1px solid #e5e7eb'
+                }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <Clock size={16} />
+                    <span style={{ fontSize: '0.75rem', color: '#475569' }}>GÖZLƏYƏN</span>
+            </div>
+            <div style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '0.25rem' }}>
+              {pendingOrders.length}
+            </div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>sifariş</div>
+          </div>
+
+                <div style={{
+                  background: '#f5f3ff',
+                  color: '#0f172a',
+                  padding: '1rem',
+                  borderRadius: '10px',
+                  textAlign: 'center',
+                  boxShadow: 'none',
+                  border: '1px solid #e5e7eb'
+                }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <DollarSign size={16} />
+                    <span style={{ fontSize: '0.75rem', color: '#475569' }}>GƏLİR</span>
+            </div>
+            <div style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '0.25rem' }}>
+              {totalRevenue}
+            </div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>AZN</div>
           </div>
         </div>
       </div>
@@ -842,9 +918,86 @@ function CustomerPanel() {
 
       {/* Orders List */}
       <div style={{ padding: '0 1rem 2rem' }}>
+        {/* Desktop Table View (CustomerData table style) */}
+        {typeof window !== 'undefined' && window.innerWidth >= 768 && filteredOrders.length > 0 && (
+          <div style={{ background: 'white', borderRadius: '10px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', border: '1px solid #e5e7eb', marginBottom: '1rem' }}>
+            <div style={{ background: '#f8fafc', padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
+              <h2 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#111827', margin: 0 }}>Sifariş Siyahısı</h2>
+              <p style={{ color: '#6b7280', margin: 0, fontSize: '0.875rem' }}>Bütün sifariş məlumatları</p>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc' }}>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 600, color: '#374151', borderBottom: '1px solid #e5e7eb' }}>Tarix</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 600, color: '#374151', borderBottom: '1px solid #e5e7eb' }}>Müştəri</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 600, color: '#374151', borderBottom: '1px solid #e5e7eb' }}>Kuryer</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 600, color: '#374151', borderBottom: '1px solid #e5e7eb' }}>Bidon</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 600, color: '#374151', borderBottom: '1px solid #e5e7eb' }}>Məbləğ</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 600, color: '#374151', borderBottom: '1px solid #e5e7eb' }}>Ödəniş</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 600, color: '#374151', borderBottom: '1px solid #e5e7eb' }}>Status</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 600, color: '#374151', borderBottom: '1px solid #e5e7eb' }}>Əməliyyat</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedDates.map(date => (
+                    groupedOrders[date].map((order) => {
+                      const customer = getCustomer(order.customerId);
+                      const courier = getCourier(order.courierId);
+                      const amount = (order.bidonOrdered || 0) * (customer?.pricePerBidon ?? 5);
+                      return (
+                        <tr key={order.id}>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{date}</td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{customer ? `${customer.firstName} ${customer.lastName}` : 'Naməlum'}</td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{courier ? courier.name : '—'}</td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>{order.bidonOrdered}</td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', color: '#16a34a', fontWeight: 700 }}>{amount} AZN</td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
+                            {order.completed && order.paymentMethod ? (order.paymentMethod === 'cash' ? 'Nağd' : order.paymentMethod === 'card' ? 'Kart' : order.paymentMethod === 'credit' ? 'Nəsiyə' : '—') : '—'}
+                          </td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
+                            <span style={{
+                              padding: '4px 10px',
+                              borderRadius: '9999px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              background: order.completed ? '#d1fae5' : '#fef3c7',
+                              color: order.completed ? '#065f46' : '#92400e',
+                              border: `1px solid ${order.completed ? '#a7f3d0' : '#fde68a'}`
+                            }}>
+                              {order.completed ? 'Tamamlandı' : 'Gözləyir'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                              <button
+                                onClick={() => alert('Redaktə funksiyası')}
+                                style={{ background: '#3b82f6', color: 'white', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '500' }}
+                              >
+                                Redaktə
+                              </button>
+                              <button
+                                onClick={() => { if (confirm('Bu sifarişi silmək istədiyinizə əminsiniz?')) { alert('Sifariş silindi'); } }}
+                                style={{ background: '#ef4444', color: 'white', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '500' }}
+                              >
+                                Sil
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Card View (default) */}
         {sortedDates.length > 0 ? (
           sortedDates.map(date => (
-            <div key={date} style={{ marginBottom: '1rem' }}>
+            <div key={date} style={{ marginBottom: '1rem', display: (typeof window !== 'undefined' && window.innerWidth >= 768) ? 'none' : 'block' }}>
               {/* Date Header */}
               <div style={{
                 background: 'white',

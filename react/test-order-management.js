@@ -3,17 +3,11 @@
 
 const API_BASE_URL = 'http://62.171.154.6:9090';
 
-// Test data
+// Test data - Swagger-ə uyğun
 const testOrder = {
   customerId: 1,
-  courierId: 1,
-  date: new Date().toISOString().split('T')[0], // Today's date
-  bidonOrdered: 5,
-  bidonReturned: 0,
-  bidonTakenByCourier: 0,
-  bidonRemaining: 0,
-  paymentMethod: null,
-  completed: false
+  courierId: 3, // Mövcud courier ID
+  carboyCount: 5 // Swagger-də tələb olunan field
 };
 
 // Test functions
@@ -31,7 +25,14 @@ async function testCreateOrder() {
     if (response.ok) {
       const result = await response.json();
       console.log('✅ Create Order Success:', result);
-      return result.id;
+      // Yeni yaradılan order-in ID-sini tapmaq üçün orders list-ə baxaq
+      const ordersResponse = await fetch(`${API_BASE_URL}/orders/all`);
+      if (ordersResponse.ok) {
+        const orders = await ordersResponse.json();
+        const latestOrder = orders.response[orders.response.length - 1];
+        return latestOrder.id;
+      }
+      return null;
     } else {
       const error = await response.text();
       console.log('❌ Create Order Failed:', response.status, error);
@@ -66,8 +67,7 @@ async function testGetOrder(orderId) {
 async function testUpdateOrder(orderId) {
   console.log(`🧪 Testing PATCH /orders/update/${orderId}...`);
   const updateData = {
-    bidonOrdered: 10,
-    completed: true
+    carboyCount: 10 // Swagger-ə uyğun field
   };
   
   try {
@@ -172,21 +172,21 @@ async function runAllTests() {
   console.log('');
   
   if (newOrderId) {
-    // Test 4: Get the created order
+    // Test 3.1: Get the created order
     await testGetOrder(newOrderId);
     console.log('');
     
-    // Test 5: Update the order
+    // Test 4: Update the order
     const updateSuccess = await testUpdateOrder(newOrderId);
     console.log('');
     
     if (updateSuccess) {
-      // Test 6: Get the updated order
+      // Test 5: Get the updated order
       await testGetOrder(newOrderId);
       console.log('');
     }
     
-    // Test 7: Delete the order
+    // Test 6: Delete the order
     await testDeleteOrder(newOrderId);
     console.log('');
   }

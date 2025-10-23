@@ -38,12 +38,41 @@ export const apiSlice = createApi({
 
     // Customer endpoints - Swagger-ə uyğun
     getCustomers: builder.query({
-      query: () => '/customers/all',
+      query: () => ({
+        url: '/customers/all',
+        params: { lang: 'az' },
+      }),
+      transformResponse: (raw) => {
+        const customers = Array.isArray(raw) ? raw : (raw?.response ?? []);
+        return customers.map(customer => ({
+          id: customer.id,
+          firstName: customer.name,
+          lastName: customer.surname,
+          phone: customer.phoneNumber,
+          address: customer.address,
+          pricePerBidon: customer.price,
+          currency: customer.currency,
+          status: customer.status
+        }));
+      },
       providesTags: ['Customer'],
     }),
 
     getCustomerById: builder.query({
       query: (id) => `/customers/${id}`,
+      transformResponse: (raw) => {
+        const customer = raw?.response || raw;
+        return {
+          id: customer.id,
+          firstName: customer.name,
+          lastName: customer.surname,
+          phone: customer.phoneNumber,
+          address: customer.address,
+          pricePerBidon: customer.price,
+          currency: customer.currency,
+          status: customer.status
+        };
+      },
       providesTags: (result, error, id) => [{ type: 'Customer', id }],
     }),
 
@@ -51,7 +80,15 @@ export const apiSlice = createApi({
       query: (customerData) => ({
         url: '/customers/add',
         method: 'POST',
-        body: customerData,
+        body: {
+          name: customerData.firstName,
+          surname: customerData.lastName,
+          phoneNumber: customerData.phone,
+          address: customerData.address,
+          price: customerData.pricePerBidon || 5,
+          currency: customerData.currency || 'AZN',
+          status: customerData.status || 0
+        },
       }),
       invalidatesTags: ['Customer'],
     }),
@@ -60,18 +97,52 @@ export const apiSlice = createApi({
       query: ({ id, ...customerData }) => ({
         url: `/customers/update/${id}`,
         method: 'PATCH',
-        body: customerData,
+        body: {
+          name: customerData.firstName,
+          surname: customerData.lastName,
+          phoneNumber: customerData.phone,
+          address: customerData.address,
+          price: customerData.pricePerBidon,
+          currency: customerData.currency,
+          status: customerData.status
+        },
       }),
       invalidatesTags: (result, error, { id }) => [{ type: 'Customer', id }, 'Customer'],
     }),
 
+    // Soft delete customer (uses existing DELETE endpoint)
     deleteCustomer: builder.mutation({
       query: (id) => ({
         url: `/customers/delete/${id}`,
         method: 'DELETE',
+        params: { lang: 'az' },
       }),
+      transformResponse: (response) => {
+        // Swagger response: {"code":4002,"response":null,"message":"CUSTOMER_WAS_DELETED","status":"NO_CONTENT"}
+        return response;
+      },
       invalidatesTags: ['Customer'],
     }),
+
+    // Restore soft deleted customer - Backend-də mövcud deyil, Swagger-də yoxdur
+    // restoreCustomer: builder.mutation({
+    //   query: (id) => ({
+    //     url: `/customers/restore/${id}`,
+    //     method: 'PATCH',
+    //     params: { lang: 'az' },
+    //   }),
+    //   invalidatesTags: ['Customer'],
+    // }),
+
+    // Get deleted customers - Backend-də mövcud deyil, Swagger-də yoxdur
+    // getDeletedCustomers: builder.query({
+    //   query: () => ({
+    //     url: '/customers/deleted',
+    //     params: { lang: 'az' },
+    //   }),
+    //   transformResponse: (raw) => Array.isArray(raw) ? raw : (raw?.response ?? []),
+    //   providesTags: ['Customer'],
+    // }),
 
     // Customer specific endpoints
     searchCustomerByPhone: builder.query({
@@ -79,6 +150,19 @@ export const apiSlice = createApi({
         url: '/customers/search-by-phone',
         params: { phone },
       }),
+      transformResponse: (raw) => {
+        const customers = Array.isArray(raw) ? raw : (raw?.response ?? []);
+        return customers.map(customer => ({
+          id: customer.id,
+          firstName: customer.name,
+          lastName: customer.surname,
+          phone: customer.phoneNumber,
+          address: customer.address,
+          pricePerBidon: customer.price,
+          currency: customer.currency,
+          status: customer.status
+        }));
+      },
       providesTags: ['Customer'],
     }),
 
@@ -87,6 +171,19 @@ export const apiSlice = createApi({
         url: '/customers/search-by-name-surname',
         params: { name, surname },
       }),
+      transformResponse: (raw) => {
+        const customers = Array.isArray(raw) ? raw : (raw?.response ?? []);
+        return customers.map(customer => ({
+          id: customer.id,
+          firstName: customer.name,
+          lastName: customer.surname,
+          phone: customer.phoneNumber,
+          address: customer.address,
+          pricePerBidon: customer.price,
+          currency: customer.currency,
+          status: customer.status
+        }));
+      },
       providesTags: ['Customer'],
     }),
 
@@ -103,9 +200,25 @@ export const apiSlice = createApi({
       providesTags: ['Customer'],
     }),
 
+    // Customer loan endpoints - Swagger-də var
+    getLoanCarboyCount: builder.query({
+      query: () => '/customers/loan/carboy/count',
+      providesTags: ['Customer'],
+    }),
+
+    getCarboyLoans: builder.query({
+      query: () => '/customers/carboy/loans',
+      transformResponse: (raw) => Array.isArray(raw) ? raw : (raw?.response ?? []),
+      providesTags: ['Customer'],
+    }),
+
     // Additional customer endpoints
     getAllCustomers: builder.query({
-      query: () => '/customers/all',
+      query: () => ({
+        url: '/customers/all',
+        params: { lang: 'az' },
+      }),
+      transformResponse: (raw) => Array.isArray(raw) ? raw : (raw?.response ?? []),
       providesTags: ['Customer'],
     }),
 
@@ -118,42 +231,44 @@ export const apiSlice = createApi({
     //   providesTags: ['Courier'],
     // }),
 
-    // File upload endpoints
-    uploadFile: builder.mutation({
-      query: (fileData) => ({
-        url: '/files/upload',
-        method: 'POST',
-        body: fileData,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      }),
-    }),
+    // File upload endpoints - Backend-də mövcud deyil, Swagger-də yoxdur
+    // uploadFile: builder.mutation({
+    //   query: (fileData) => ({
+    //     url: '/files/upload',
+    //     method: 'POST',
+    //     body: fileData,
+    //     headers: {
+    //       'Content-Type': 'multipart/form-data',
+    //     },
+    //   }),
+    // }),
 
-    // Search endpoints
-    searchProducts: builder.query({
-      query: (searchTerm) => ({
-        url: '/search/products',
-        params: { q: searchTerm },
-      }),
-      providesTags: ['Product'],
-    }),
+    // Search endpoints - Backend-də mövcud deyil, Swagger-də yoxdur
+    // searchProducts: builder.query({
+    //   query: (searchTerm) => ({
+    //     url: '/search/products',
+    //     params: { q: searchTerm },
+    //   }),
+    //   providesTags: ['Product'],
+    // }),
 
-    searchOrders: builder.query({
-      query: (searchTerm) => ({
-        url: '/search/orders',
-        params: { q: searchTerm },
-      }),
-      providesTags: ['Order'],
-    }),
+    // searchOrders: builder.query({
+    //   query: (searchTerm) => ({
+    //     url: '/search/orders',
+    //     params: { q: searchTerm },
+    //   }),
+    //   providesTags: ['Order'],
+    // }),
 
     // Order endpoints - Swagger-ə uyğun
-    // getOrders: builder.query({
-    //   query: () => '/orders/all', // Bu endpoint hələ yoxdur
-    //   providesTags: ['Order'],
-    //   retry: false,
-    //   transformErrorResponse: () => [],
-    // }),
+    getOrders: builder.query({
+      query: () => ({
+        url: '/orders/all',
+        params: { lang: 'az' },
+      }),
+      transformResponse: (raw) => Array.isArray(raw) ? raw : (raw?.response ?? []),
+      providesTags: ['Order'],
+    }),
 
     getOrderById: builder.query({
       query: (id) => `/orders/${id}`,
@@ -182,29 +297,77 @@ export const apiSlice = createApi({
       query: (id) => ({
         url: `/orders/delete/${id}`,
         method: 'DELETE',
+        params: { lang: 'az' }, // Swagger-də lang parametri var
+      }),
+      transformResponse: (response) => {
+        // Swagger response format-ına uyğun
+        return response;
+      },
+      invalidatesTags: ['Order'],
+    }),
+
+    // Order search and filter endpoints - Backend-də mövcud deyil, Swagger-də yoxdur
+    // searchOrdersByCustomer: builder.query({
+    //   query: (customerId) => ({
+    //     url: '/orders/search-by-customer',
+    //     params: { customerId },
+    //   }),
+    //   providesTags: ['Order'],
+    // }),
+
+    // searchOrdersByDate: builder.query({
+    //   query: (date) => ({
+    //     url: '/orders/search-by-date',
+    //     params: { date },
+    //   }),
+    //   providesTags: ['Order'],
+    // }),
+
+    getOrderCount: builder.query({
+      query: () => '/orders/count',
+      providesTags: ['Order'],
+    }),
+
+    // Courier endpoints - Swagger-ə uyğun
+    getCouriers: builder.query({
+      query: () => '/couriers/all',
+      providesTags: ['Courier'],
+    }),
+
+    getCourierById: builder.query({
+      query: (id) => `/couriers/${id}`,
+      providesTags: (result, error, id) => [{ type: 'Courier', id }],
+    }),
+
+    // Courier order management endpoints
+    updateOrderStatus: builder.mutation({
+      query: ({ orderId, status }) => ({
+        url: `/orders/${orderId}/status`,
+        method: 'PATCH',
+        body: { status },
       }),
       invalidatesTags: ['Order'],
     }),
 
-    // Order search and filter endpoints
-    searchOrdersByCustomer: builder.query({
-      query: (customerId) => ({
-        url: '/orders/search-by-customer',
-        params: { customerId },
+    completeOrderByCourier: builder.mutation({
+      query: ({ orderId, ...orderData }) => ({
+        url: `/orders/${orderId}/complete`,
+        method: 'PATCH',
+        body: orderData,
       }),
-      providesTags: ['Order'],
+      invalidatesTags: ['Order'],
     }),
 
-    searchOrdersByDate: builder.query({
-      query: (date) => ({
-        url: '/orders/search-by-date',
-        params: { date },
+    sendWhatsAppNotification: builder.mutation({
+      query: ({ phone, message }) => ({
+        url: '/notifications/whatsapp',
+        method: 'POST',
+        body: { phone, message },
       }),
-      providesTags: ['Order'],
     }),
 
-    getOrderCount: builder.query({
-      query: () => '/orders/count',
+    getCourierOrders: builder.query({
+      query: (courierId) => `/orders/courier/${courierId}`,
       providesTags: ['Order'],
     }),
   }),
@@ -223,33 +386,40 @@ export const {
   useCreateCustomerMutation,
   useUpdateCustomerMutation,
   useDeleteCustomerMutation,
+  // useRestoreCustomerMutation, // Backend-də mövcud deyil
+  // useGetDeletedCustomersQuery, // Backend-də mövcud deyil
   useSearchCustomerByPhoneQuery,
   useSearchCustomerByNameSurnameQuery,
   useExportCustomersQuery,
   useGetCustomerCountQuery,
   useGetAllCustomersQuery,
+  useGetLoanCarboyCountQuery,
+  useGetCarboyLoansQuery,
   
-  // Courier hooks - hələ hazır deyil
-  // useGetCouriersQuery,
-  // useGetCourierByIdQuery,
-  // useCreateCourierMutation,
-  // useUpdateCourierMutation,
-  // useDeleteCourierMutation,
+  // Courier hooks
+  useGetCouriersQuery,
+  useGetCourierByIdQuery,
+  
+  // Courier order management hooks
+  useUpdateOrderStatusMutation,
+  useCompleteOrderByCourierMutation,
+  useSendWhatsAppNotificationMutation,
+  useGetCourierOrdersQuery,
   
   // Order hooks
-  // useGetOrdersQuery, // Bu endpoint hələ yoxdur
+  useGetOrdersQuery,
   useGetOrderByIdQuery,
   useCreateOrderMutation,
   useUpdateOrderMutation,
   useDeleteOrderMutation,
-  useSearchOrdersByCustomerQuery,
-  useSearchOrdersByDateQuery,
-  // useGetOrderCountQuery, // Bu endpoint hələ yoxdur
+  // useSearchOrdersByCustomerQuery, // Backend-də mövcud deyil
+  // useSearchOrdersByDateQuery, // Backend-də mövcud deyil
+  useGetOrderCountQuery,
   
-  // File upload hooks
-  useUploadFileMutation,
+  // File upload hooks - Backend-də mövcud deyil
+  // useUploadFileMutation,
   
-  // Search hooks
-  useSearchProductsQuery,
-  useSearchOrdersQuery,
+  // Search hooks - Backend-də mövcud deyil
+  // useSearchProductsQuery,
+  // useSearchOrdersQuery,
 } = apiSlice;
