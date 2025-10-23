@@ -1,239 +1,312 @@
 # Order Management Implementation
 
-## Overview
-The order management functionality has been successfully integrated into the CustomerPanel component, providing a complete CRUD (Create, Read, Update, Delete) interface for managing customer orders.
+Bu sənəd, React tətbiqində sifariş idarəetməsi funksionallığının tam implementasiyasını izah edir.
 
-## Features Implemented
+## API Endpoints
 
-### 1. API Integration
-- **POST** `/orders/add` - Create new orders
-- **PATCH** `/orders/update/{id}` - Update existing orders
-- **GET** `/orders/{id}` - Get order by ID
-- **DELETE** `/orders/delete/{id}` - Delete orders
-- **GET** `/orders/all` - Get all orders
-- **GET** `/orders/count` - Get order count
-- **Search endpoints** for filtering orders by customer, date, etc.
+### Order Controller Endpoints
 
-### 2. Order Management Functions
-- **Create Order**: Add new orders with customer, courier, date, and bidon count
-- **Edit Order**: Modify existing order details
-- **Delete Order**: Remove orders with confirmation
-- **View Orders**: Display all orders with detailed information
-
-### 3. Enhanced UI Features
-- **Order Form**: Dynamic form that switches between create and edit modes
-- **Search & Filter**: 
-  - Search orders by customer name, courier name, date, or bidon count
-  - Filter by order status (all, pending, completed)
-  - Clear filters functionality
-- **Order Statistics**: Visual dashboard showing:
-  - Total orders count
-  - Pending orders count
-  - Completed orders count
-  - Total bidon count
-- **Status Indicators**: Visual badges showing order completion status
-- **Responsive Design**: Mobile-friendly interface with proper styling
-
-### 4. Data Management
-- **Real-time Updates**: Orders are automatically refreshed after CRUD operations
-- **Context Integration**: Uses OrdersContext for state management
-- **API Hooks**: Redux Toolkit Query hooks for efficient data fetching
-- **Error Handling**: Toast notifications for success/error feedback
-- **Loading States**: Visual feedback during API operations
-
-## Technical Implementation
-
-### API Slice (`src/services/apiSlice.js`)
-```javascript
-// Order endpoints
-getOrders: builder.query({
-  query: () => '/orders/all',
-  providesTags: ['Order'],
-}),
-
-createOrder: builder.mutation({
-  query: (orderData) => ({
-    url: '/orders/add',
-    method: 'POST',
-    body: orderData,
-  }),
-  invalidatesTags: ['Order'],
-}),
-
-updateOrder: builder.mutation({
-  query: ({ id, ...orderData }) => ({
-    url: `/orders/update/${id}`,
-    method: 'PATCH',
-    body: orderData,
-  }),
-  invalidatesTags: (result, error, { id }) => [{ type: 'Order', id }, 'Order'],
-}),
-
-deleteOrder: builder.mutation({
-  query: (id) => ({
-    url: `/orders/delete/${id}`,
-    method: 'DELETE',
-  }),
-  invalidatesTags: ['Order'],
-}),
-```
-
-### Context Integration (`src/contexts/OrdersContext.jsx`)
-- Automatically fetches customers, couriers, and orders from API
-- Provides loading states and data to components
-- Handles data synchronization between API and local state
-
-### Component Features (`src/pages/dashboard/CustomerPanel.jsx`)
-- **State Management**: Local state for form data, editing mode, and search/filter
-- **Form Handling**: Dynamic form that adapts to create/edit modes
-- **Search & Filter**: Real-time filtering of orders based on multiple criteria
-- **CRUD Operations**: Complete order lifecycle management
-- **UI Enhancements**: Modern design with gradients, shadows, and animations
-
-## Usage Instructions
-
-### Creating a New Order
-1. Click "Yeni Sifariş Əlavə Et" button
-2. Select customer from dropdown (searchable)
-3. Select courier from dropdown (searchable)
-4. Choose order date
-5. Enter bidon count
-6. Click "Sifarişi Yarat"
-
-### Editing an Order
-1. Click the edit (pencil) icon on any order
-2. Modify the required fields
-3. Click "Sifarişi Yenilə" to save changes
-
-### Deleting an Order
-1. Click the delete (trash) icon on any order
-2. Confirm deletion in the popup dialog
-
-### Searching and Filtering
-1. Use the search box to find orders by various criteria
-2. Use the status dropdown to filter by completion status
-3. Click "Təmizlə" to reset all filters
-
-## Data Structure
-
-### Order Object
-```javascript
+#### 1. Create Order
+- **Endpoint**: `POST /orders/add`
+- **Description**: Yeni sifariş yaradır
+- **Request Body**:
+```json
 {
-  id: number,
-  customerId: number,
-  courierId: number,
-  date: string,
-  bidonOrdered: number,
-  bidonReturned: number,
-  bidonTakenByCourier: number,
-  bidonRemaining: number,
-  paymentMethod: string | null,
-  completed: boolean
+  "carboyCount": 0,
+  "courierId": 0,
+  "customerId": 0,
+  "orderDate": "2025-09-02",
+  "orderTime": "string"
+}
+```
+- **Response**:
+```json
+{
+  "customerAddress": "string",
+  "customerName": "string",
+  "customerSurname": "string",
+  "customerPhoneNumber": "string",
+  "totalPrice": 0,
+  "totalCarboyCount": 0,
+  "orderDate": "2025-09-02"
 }
 ```
 
-### Customer Object
-```javascript
+#### 2. Update Order
+- **Endpoint**: `PATCH /orders/update/{id}`
+- **Description**: Mövcud sifarişi yeniləyir
+- **Request Body**:
+```json
 {
-  id: number,
-  firstName: string,
-  lastName: string,
-  phone: string,
-  address: string,
-  pricePerBidon: number
+  "carboyCount": 0
 }
 ```
+- **Response**: Yenilənmiş sifariş məlumatları
 
-### Courier Object
-```javascript
-{
-  id: number,
-  name: string,
-  phone: string,
-  vehicle: string
-}
+#### 3. Get Order by ID
+- **Endpoint**: `GET /orders/{id}`
+- **Description**: ID-yə görə sifariş məlumatlarını qaytarır
+- **Response**: Sifariş məlumatları
+
+#### 4. Get All Orders
+- **Endpoint**: `GET /orders/all`
+- **Description**: Bütün sifarişləri qaytarır
+- **Response**:
+```json
+[
+  {
+    "id": 0,
+    "customerFullName": "string",
+    "customerPhoneNumber": "string",
+    "customerAddress": "string",
+    "orderDate": "2025-09-02",
+    "price": 0,
+    "carboyCount": 0,
+    "courierFullName": "string",
+    "orderStatus": "PENDING"
+  }
+]
 ```
 
-## Styling and UI
+#### 5. Get Order Count
+- **Endpoint**: `GET /orders/count`
+- **Description**: Sifarişlərin ümumi sayını qaytarır
+- **Response**: Sifariş sayı (integer)
 
-### Design System
-- **Color Scheme**: Blue gradients for primary actions, green for success, orange for warnings
-- **Typography**: Inter font family with proper hierarchy
-- **Spacing**: Consistent padding and margins using rem units
-- **Shadows**: Subtle shadows for depth and modern feel
-- **Responsive**: Mobile-first design with proper breakpoints
+#### 6. Delete Order
+- **Endpoint**: `DELETE /orders/delete/{id}`
+- **Description**: Sifarişi silir
+- **Response**: 204 No Content
 
-### Interactive Elements
-- **Hover Effects**: Smooth transitions on buttons and cards
-- **Loading States**: Spinners and disabled states during API calls
-- **Toast Notifications**: Success/error feedback for user actions
-- **Form Validation**: Real-time validation with visual feedback
+### Customer Controller Endpoints
+
+#### 1. Add Customer
+- **Endpoint**: `POST /customers/add`
+- **Description**: Yeni müştəri əlavə edir
+
+#### 2. Update Customer
+- **Endpoint**: `PATCH /customers/update/{id}`
+- **Description**: Müştəri məlumatlarını yeniləyir
+
+#### 3. Get Customer by ID
+- **Endpoint**: `GET /customers/{id}`
+- **Description**: ID-yə görə müştəri məlumatlarını qaytarır
+
+#### 4. Search Customer by Phone
+- **Endpoint**: `GET /customers/search-by-phone`
+- **Description**: Telefon nömrəsinə görə müştəri axtarır
+
+#### 5. Search Customer by Name/Surname
+- **Endpoint**: `GET /customers/search-by-name-surname`
+- **Description**: Ad və soyada görə müştəri axtarır
+
+#### 6. Get Customer Count
+- **Endpoint**: `GET /customers/count`
+- **Description**: Müştərilərin ümumi sayını qaytarır
+
+#### 7. Get All Customers
+- **Endpoint**: `GET /customers/all`
+- **Description**: Bütün müştəriləri qaytarır
+
+#### 8. Delete Customer
+- **Endpoint**: `DELETE /customers/delete/{id}`
+- **Description**: Müştərini silir
+
+#### 9. Customer Loan Endpoints
+- **Endpoint**: `GET /customers/loan/carboy/count`
+- **Description**: Müştərilərin borc bidon sayını qaytarır
+
+- **Endpoint**: `GET /customers/carboy/loans`
+- **Description**: Müştərilərin bidon borclarını qaytarır
+
+#### 10. Export Customers
+- **Endpoint**: `GET /customers/export`
+- **Description**: Müştəri məlumatlarını Excel formatında export edir
+
+### Courier Controller Endpoints
+
+#### 1. Get Courier by ID
+- **Endpoint**: `GET /couriers/{id}`
+- **Description**: ID-yə görə kuryer məlumatlarını qaytarır
+
+#### 2. Get All Couriers
+- **Endpoint**: `GET /couriers/all`
+- **Description**: Bütün kuryerləri qaytarır
+
+### User Controller Endpoints
+
+#### 1. Register User
+- **Endpoint**: `POST /users/register`
+- **Description**: Yeni istifadəçi qeydiyyatı
+
+#### 2. Login User
+- **Endpoint**: `POST /users/login`
+- **Description**: İstifadəçi girişi
+
+#### 3. Get User by ID
+- **Endpoint**: `GET /users/{id}`
+- **Description**: ID-yə görə istifadəçi məlumatlarını qaytarır
+
+## React Implementation
+
+### API Slice (apiSlice.js)
+
+RTK Query istifadə edərək bütün API endpoint-ləri üçün hooks yaradılmışdır:
+
+```javascript
+// Order hooks
+useGetOrdersQuery()           // Bütün sifarişləri alır
+useGetOrderByIdQuery(id)      // ID-yə görə sifariş alır
+useCreateOrderMutation()      // Yeni sifariş yaradır
+useUpdateOrderMutation()      // Sifariş yeniləyir
+useDeleteOrderMutation()      // Sifariş silir
+useGetOrderCountQuery()       // Sifariş sayını alır
+
+// Customer hooks
+useGetCustomersQuery()        // Bütün müştəriləri alır
+useGetCustomerByIdQuery(id)   // ID-yə görə müştəri alır
+useCreateCustomerMutation()   // Yeni müştəri yaradır
+useUpdateCustomerMutation()   // Müştəri yeniləyir
+useDeleteCustomerMutation()   // Müştəri silir
+useGetCustomerCountQuery()    // Müştəri sayını alır
+
+// Courier hooks
+useGetCouriersQuery()         // Bütün kuryerləri alır
+useGetCourierByIdQuery(id)    // ID-yə görə kuryer alır
+```
+
+### CustomerPanel Component
+
+#### Əsas Funksionallıqlar:
+
+1. **Sifariş Yaratma**:
+   - Müştəri seçimi (dropdown ilə axtarış)
+   - Kuryer seçimi (dropdown ilə axtarış)
+   - Bidon sayı daxil etmə
+   - Tarix seçimi
+   - Avtomatik məbləğ hesablama
+
+2. **Sifariş Redaktə**:
+   - Mövcud sifarişi yeniləmə
+   - Bidon sayını dəyişdirmə
+
+3. **Sifariş Silmə**:
+   - Təsdiq ilə sifariş silmə
+
+4. **Müştəri Silmə**:
+   - Təsdiq ilə müştəri silmə
+   - Əlaqəli sifarişləri də yeniləmə
+
+5. **Axtarış və Filtrləmə**:
+   - Sifariş axtarışı
+   - Status filtri (Gözləyən/Tamamlanmış)
+   - Tarix filtri
+
+6. **Statistikalar**:
+   - Ümumi sifariş sayı
+   - Tamamlanmış sifariş sayı
+   - Gözləyən sifariş sayı
+   - Ümumi gəlir
+
+#### Data Management:
+
+```javascript
+// RTK Query hooks
+const { data: backendOrders = [], isLoading: isLoadingOrders, refetch: refetchOrders } = useGetOrdersQuery();
+const { data: backendCustomers = [], isLoading: isLoadingCustomers, refetch: refetchCustomers } = useGetCustomersQuery();
+const { data: backendCouriers = [], isLoading: isLoadingCouriers, refetch: refetchCouriers } = useGetCouriersQuery();
+
+// Mutation hooks
+const [createOrder, { isLoading: isCreatingOrder }] = useCreateOrderMutation();
+const [updateOrder, { isLoading: isUpdatingOrder }] = useUpdateOrderMutation();
+const [deleteOrder, { isLoading: isDeletingOrder }] = useDeleteOrderMutation();
+const [deleteCustomer, { isLoading: isDeletingCustomer }] = useDeleteCustomerMutation();
+```
+
+#### Order Creation Process:
+
+```javascript
+const handleAddOrder = async () => {
+  const backendOrderData = {
+    customerId: Number(customerId),
+    courierId: Number(courierId),
+    carboyCount: Number(bidonOrdered),
+  };
+
+  if (editingOrder) {
+    await updateOrder({ id: editingOrder.id, ...backendOrderData }).unwrap();
+  } else {
+    await createOrder(backendOrderData).unwrap();
+  }
+
+  await refetchOrders();
+  // UI reset
+};
+```
 
 ## Error Handling
 
-### API Errors
-- Network errors are caught and displayed as toast notifications
-- User-friendly error messages in Azerbaijani language
-- Console logging for debugging purposes
+Bütün API çağırışları üçün error handling implementasiyası:
 
-### Form Validation
-- Required field validation before submission
-- Visual feedback for validation errors
-- Disabled submit buttons during processing
+```javascript
+try {
+  await createOrder(orderData).unwrap();
+  alert('Sifariş uğurla əlavə edildi!');
+} catch (error) {
+  console.error('Error saving order:', error);
+  
+  if (error.data && error.data.message) {
+    alert(`Backend xətası: ${error.data.message}`);
+  } else if (error.status) {
+    alert(`HTTP xətası: ${error.status}`);
+  } else {
+    alert('Sifariş yadda saxlanılarkən xəta baş verdi.');
+  }
+}
+```
 
-## Performance Considerations
+## Loading States
 
-### Optimizations
-- **Redux Toolkit Query**: Automatic caching and background updates
-- **Debounced Search**: Efficient filtering without excessive API calls
-- **Lazy Loading**: Components load data only when needed
-- **Memoization**: Context values are optimized to prevent unnecessary re-renders
+Bütün async əməliyyatlar üçün loading state-ləri:
 
-### Loading States
-- Skeleton loaders for initial data fetch
-- Disabled states during API operations
-- Progress indicators for long-running operations
+```javascript
+// Loading indicators
+{isLoadingOrders && <Loader2 className="animate-spin" />}
+{isCreatingOrder && 'Yaradılır...'}
+{isUpdatingOrder && 'Yenilənir...'}
+{isDeletingOrder && 'Silinir...'}
+```
+
+## Data Synchronization
+
+- RTK Query avtomatik cache management
+- `refetch()` funksiyası ilə manual yeniləmə
+- Optimistic updates üçün `invalidatesTags`
+
+## UI Features
+
+1. **Responsive Design**: Mobile və desktop üçün fərqli görünüşlər
+2. **Real-time Updates**: Sifariş əlavə edildikdə dərhal UI yenilənir
+3. **Search Functionality**: Müştəri və kuryer axtarışı
+4. **Status Indicators**: Sifariş statusları (Gözləyir/Tamamlandı)
+5. **Statistics Dashboard**: Real-time statistikalar
+6. **Modal Dialogs**: Sifariş əlavə etmə və redaktə üçün modal-lar
+
+## Backend Integration
+
+Bütün endpoint-lər Swagger dokumentasiyasına uyğun implementasiya edilmişdir:
+
+- Base URL: `http://62.171.154.6:9090`
+- Content-Type: `application/json`
+- Error responses: 401, 403, 404, 409, 500
+- Success responses: 200, 204
 
 ## Future Enhancements
 
-### Potential Improvements
-1. **Bulk Operations**: Select multiple orders for batch actions
-2. **Export Functionality**: Export orders to Excel/PDF
-3. **Advanced Filtering**: Date range, price range, courier performance
-4. **Order Templates**: Save common order configurations
-5. **Real-time Updates**: WebSocket integration for live order updates
-6. **Mobile App**: Native mobile application for couriers
-7. **Analytics Dashboard**: Advanced reporting and insights
-
-### API Extensions
-1. **Order History**: Track order changes over time
-2. **Customer Analytics**: Order patterns and preferences
-3. **Courier Performance**: Delivery metrics and ratings
-4. **Payment Integration**: Online payment processing
-5. **Notification System**: SMS/Email alerts for order updates
-
-## Testing
-
-### Manual Testing Checklist
-- [ ] Create new order with valid data
-- [ ] Edit existing order details
-- [ ] Delete order with confirmation
-- [ ] Search orders by various criteria
-- [ ] Filter orders by status
-- [ ] Form validation and error handling
-- [ ] Loading states and user feedback
-- [ ] Mobile responsiveness
-- [ ] Dark mode compatibility
-
-### Automated Testing (Future)
-- Unit tests for utility functions
-- Integration tests for API endpoints
-- Component tests for UI interactions
-- E2E tests for complete user workflows
-
-## Conclusion
-
-The order management system has been successfully implemented with a modern, user-friendly interface that provides all necessary functionality for managing customer orders. The implementation follows best practices for React development, includes proper error handling, and provides an excellent user experience with responsive design and intuitive controls.
-
-The system is ready for production use and can be easily extended with additional features as business requirements evolve.
+1. **Real-time Notifications**: WebSocket ilə real-time bildirişlər
+2. **Bulk Operations**: Çoxlu sifariş əməliyyatları
+3. **Advanced Filtering**: Tarix aralığı, məbləğ filtri
+4. **Export Functionality**: Sifariş məlumatlarını export etmə
+5. **Print Functionality**: Sifariş çap etmə
+6. **Audit Trail**: Sifariş dəyişikliklərinin izlənməsi
 
